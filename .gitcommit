@@ -1,0 +1,9 @@
+# type: short description (under 72 chars, no period)
+#
+# Types: feat | fix | refactor | docs | chore | ci
+#
+# Examples:
+#   feat: add preset export button
+#   fix: crash when attaching to 32-bit process
+#   chore: update imgui submodule to v1.92
+#   ci: add artifact upload to release workflow
