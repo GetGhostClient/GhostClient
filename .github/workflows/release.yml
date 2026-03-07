@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure CMake
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Upload Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: GhostClient ${{ github.ref_name }}
+          body: |
+            ## GhostClient ${{ github.ref_name }}
+
+            ### Download
+            Run `ghostclient.exe` as Administrator. Offsets are fetched automatically on first launch.
+
+            ### Changelog
+            See [commits](${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }}) since last release.
+          files: build/Release/ghostclient.exe
+          draft: false
+          prerelease: false
