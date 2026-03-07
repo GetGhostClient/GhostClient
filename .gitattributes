@@ -1,0 +1,33 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# C/C++ source files
+*.cpp text eol=lf
+*.h   text eol=lf
+*.c   text eol=lf
+
+# CMake
+CMakeLists.txt text eol=lf
+*.cmake        text eol=lf
+
+# Scripts
+*.sh   text eol=lf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# Markdown / docs
+*.md  text eol=lf
+*.txt text eol=lf
+
+# JSON
+*.json text eol=lf
+
+# Binary files — never diff or mangle
+*.exe  binary
+*.dll  binary
+*.lib  binary
+*.obj  binary
+*.bin  binary
+*.ttf  binary
+*.png  binary
+*.jpg  binary
