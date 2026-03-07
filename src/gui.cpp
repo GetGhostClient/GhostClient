@@ -10,8 +10,6 @@
 #include <dwmapi.h>
 #include <commdlg.h>
 
-#pragma comment(lib, "dwmapi.lib")
-
 namespace fs = std::filesystem;
 
 std::string GetAppDataDir() {
@@ -120,78 +118,84 @@ void GhostGUI::AddLog(const std::string& msg) {
 
 void GhostGUI::ApplyTheme() {
     ImGuiStyle& style = ImGui::GetStyle();
-    ImVec4* colors = style.Colors;
+    ImVec4* c = style.Colors;
 
-    ImVec4 black       = ImVec4(0.00f, 0.00f, 0.00f, 1.00f);
-    ImVec4 darkGray1   = ImVec4(0.08f, 0.08f, 0.08f, 1.00f);
-    ImVec4 darkGray2   = ImVec4(0.12f, 0.12f, 0.12f, 1.00f);
-    ImVec4 midGray     = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
-    ImVec4 lightGray   = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
-    ImVec4 white       = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-    ImVec4 dimWhite    = ImVec4(0.70f, 0.70f, 0.70f, 1.00f);
-    ImVec4 hoverGray   = ImVec4(0.25f, 0.25f, 0.25f, 1.00f);
-    ImVec4 activeGray  = ImVec4(0.30f, 0.30f, 0.30f, 1.00f);
-    ImVec4 transparent = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    // Palette
+    const ImVec4 bg0        = ImVec4(0.05f, 0.05f, 0.05f, 1.00f); // deepest bg
+    const ImVec4 bg1        = ImVec4(0.09f, 0.09f, 0.09f, 1.00f); // panel bg
+    const ImVec4 bg2        = ImVec4(0.13f, 0.13f, 0.13f, 1.00f); // input/frame bg
+    const ImVec4 border     = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
+    const ImVec4 hover      = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
+    const ImVec4 active     = ImVec4(0.28f, 0.28f, 0.28f, 1.00f);
+    const ImVec4 text       = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    const ImVec4 textDim    = ImVec4(0.45f, 0.45f, 0.45f, 1.00f);
+    const ImVec4 accent     = ImVec4(0.35f, 0.60f, 1.00f, 1.00f); // blue accent
+    const ImVec4 accentDim  = ImVec4(0.25f, 0.45f, 0.80f, 1.00f);
+    const ImVec4 none       = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
 
-    colors[ImGuiCol_Text]                  = white;
-    colors[ImGuiCol_TextDisabled]          = lightGray;
-    colors[ImGuiCol_WindowBg]              = black;
-    colors[ImGuiCol_ChildBg]               = black;
-    colors[ImGuiCol_PopupBg]               = darkGray1;
-    colors[ImGuiCol_Border]                = midGray;
-    colors[ImGuiCol_BorderShadow]          = transparent;
-    colors[ImGuiCol_FrameBg]               = darkGray2;
-    colors[ImGuiCol_FrameBgHovered]        = hoverGray;
-    colors[ImGuiCol_FrameBgActive]         = activeGray;
-    colors[ImGuiCol_TitleBg]               = darkGray1;
-    colors[ImGuiCol_TitleBgActive]         = darkGray2;
-    colors[ImGuiCol_TitleBgCollapsed]      = black;
-    colors[ImGuiCol_MenuBarBg]             = darkGray1;
-    colors[ImGuiCol_ScrollbarBg]           = black;
-    colors[ImGuiCol_ScrollbarGrab]         = midGray;
-    colors[ImGuiCol_ScrollbarGrabHovered]  = lightGray;
-    colors[ImGuiCol_ScrollbarGrabActive]   = dimWhite;
-    colors[ImGuiCol_CheckMark]             = white;
-    colors[ImGuiCol_SliderGrab]            = lightGray;
-    colors[ImGuiCol_SliderGrabActive]      = white;
-    colors[ImGuiCol_Button]                = darkGray2;
-    colors[ImGuiCol_ButtonHovered]         = hoverGray;
-    colors[ImGuiCol_ButtonActive]          = activeGray;
-    colors[ImGuiCol_Header]                = darkGray2;
-    colors[ImGuiCol_HeaderHovered]         = hoverGray;
-    colors[ImGuiCol_HeaderActive]          = activeGray;
-    colors[ImGuiCol_Separator]             = midGray;
-    colors[ImGuiCol_SeparatorHovered]      = lightGray;
-    colors[ImGuiCol_SeparatorActive]       = white;
-    colors[ImGuiCol_ResizeGrip]            = midGray;
-    colors[ImGuiCol_ResizeGripHovered]     = lightGray;
-    colors[ImGuiCol_ResizeGripActive]      = white;
-    colors[ImGuiCol_Tab]                   = darkGray1;
-    colors[ImGuiCol_TabHovered]            = hoverGray;
-    colors[ImGuiCol_TabSelected]           = midGray;
-    colors[ImGuiCol_TabDimmed]             = darkGray1;
-    colors[ImGuiCol_TabDimmedSelected]     = darkGray2;
-    colors[ImGuiCol_TableHeaderBg]         = darkGray1;
-    colors[ImGuiCol_TableBorderStrong]     = midGray;
-    colors[ImGuiCol_TableBorderLight]      = darkGray2;
-    colors[ImGuiCol_TableRowBg]            = transparent;
-    colors[ImGuiCol_TableRowBgAlt]         = ImVec4(0.05f, 0.05f, 0.05f, 1.00f);
-    colors[ImGuiCol_TextSelectedBg]        = midGray;
-    colors[ImGuiCol_NavHighlight]          = white;
+    c[ImGuiCol_Text]                 = text;
+    c[ImGuiCol_TextDisabled]         = textDim;
+    c[ImGuiCol_WindowBg]             = bg0;
+    c[ImGuiCol_ChildBg]              = bg0;
+    c[ImGuiCol_PopupBg]              = bg1;
+    c[ImGuiCol_Border]               = border;
+    c[ImGuiCol_BorderShadow]         = none;
+    c[ImGuiCol_FrameBg]              = bg2;
+    c[ImGuiCol_FrameBgHovered]       = hover;
+    c[ImGuiCol_FrameBgActive]        = active;
+    c[ImGuiCol_TitleBg]              = bg1;
+    c[ImGuiCol_TitleBgActive]        = bg1;
+    c[ImGuiCol_TitleBgCollapsed]     = bg0;
+    c[ImGuiCol_MenuBarBg]            = bg1;
+    c[ImGuiCol_ScrollbarBg]          = bg0;
+    c[ImGuiCol_ScrollbarGrab]        = bg2;
+    c[ImGuiCol_ScrollbarGrabHovered] = hover;
+    c[ImGuiCol_ScrollbarGrabActive]  = active;
+    c[ImGuiCol_CheckMark]            = accent;
+    c[ImGuiCol_SliderGrab]           = accentDim;
+    c[ImGuiCol_SliderGrabActive]     = accent;
+    c[ImGuiCol_Button]               = bg2;
+    c[ImGuiCol_ButtonHovered]        = hover;
+    c[ImGuiCol_ButtonActive]         = active;
+    c[ImGuiCol_Header]               = bg2;
+    c[ImGuiCol_HeaderHovered]        = hover;
+    c[ImGuiCol_HeaderActive]         = active;
+    c[ImGuiCol_Separator]            = border;
+    c[ImGuiCol_SeparatorHovered]     = accentDim;
+    c[ImGuiCol_SeparatorActive]      = accent;
+    c[ImGuiCol_ResizeGrip]           = none;
+    c[ImGuiCol_ResizeGripHovered]    = accentDim;
+    c[ImGuiCol_ResizeGripActive]     = accent;
+    c[ImGuiCol_Tab]                  = bg1;
+    c[ImGuiCol_TabHovered]           = hover;
+    c[ImGuiCol_TabSelected]          = bg2;
+    c[ImGuiCol_TabDimmed]            = bg1;
+    c[ImGuiCol_TabDimmedSelected]    = bg2;
+    c[ImGuiCol_TableHeaderBg]        = bg1;
+    c[ImGuiCol_TableBorderStrong]    = border;
+    c[ImGuiCol_TableBorderLight]     = bg2;
+    c[ImGuiCol_TableRowBg]           = none;
+    c[ImGuiCol_TableRowBgAlt]        = ImVec4(0.08f, 0.08f, 0.08f, 1.00f);
+    c[ImGuiCol_TextSelectedBg]       = ImVec4(0.35f, 0.60f, 1.00f, 0.30f);
+    c[ImGuiCol_NavHighlight]         = accent;
 
-    style.WindowRounding    = 4.0f;
-    style.FrameRounding     = 3.0f;
-    style.GrabRounding      = 2.0f;
-    style.TabRounding       = 3.0f;
-    style.ScrollbarRounding = 3.0f;
-    style.WindowPadding     = ImVec2(12, 12);
+    style.WindowRounding    = 6.0f;
+    style.ChildRounding     = 4.0f;
+    style.FrameRounding     = 4.0f;
+    style.GrabRounding      = 4.0f;
+    style.TabRounding       = 4.0f;
+    style.PopupRounding     = 4.0f;
+    style.ScrollbarRounding = 4.0f;
+    style.WindowPadding     = ImVec2(14, 14);
     style.FramePadding      = ImVec2(8, 4);
-    style.ItemSpacing       = ImVec2(8, 6);
-    style.ScrollbarSize     = 12.0f;
+    style.ItemSpacing       = ImVec2(8, 5);
+    style.ItemInnerSpacing  = ImVec2(6, 4);
+    style.ScrollbarSize     = 10.0f;
     style.GrabMinSize       = 8.0f;
     style.WindowBorderSize  = 1.0f;
     style.FrameBorderSize   = 0.0f;
     style.TabBorderSize     = 0.0f;
+    style.WindowMinSize     = ImVec2(400, 300);
 }
 
 void GhostGUI::Render() {
@@ -302,6 +306,8 @@ void GhostGUI::Render() {
         }
     }
 
+    extern bool g_draggingHeader;
+
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
@@ -312,21 +318,92 @@ void GhostGUI::Render() {
         ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoBringToFrontOnFocus |
-        ImGuiWindowFlags_MenuBar;
+        ImGuiWindowFlags_NoBringToFrontOnFocus;
 
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::Begin("##GhostClient", nullptr, windowFlags);
+    ImGui::PopStyleVar();
+
+    float winW = ImGui::GetWindowWidth();
+
+    // ── Custom titlebar ──────────────────────────────────────────────
+    const float TITLE_H = 40.0f;
+    ImVec2 titleMin = ImGui::GetWindowPos();
+    ImVec2 titleMax = ImVec2(titleMin.x + winW, titleMin.y + TITLE_H);
+
+    // Drag region detection (exclude right 80px where buttons live)
+    ImVec2 mp = ImGui::GetIO().MousePos;
+    bool overTitle = mp.x >= titleMin.x && mp.x <= titleMax.x - 80.0f
+                  && mp.y >= titleMin.y && mp.y <= titleMax.y;
+    g_draggingHeader = overTitle && !ImGui::GetIO().WantCaptureMouse;
+
+    // Draw titlebar background
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(titleMin, titleMax,
+        IM_COL32(14, 14, 14, 255));
+    dl->AddLine(ImVec2(titleMin.x, titleMax.y), titleMax,
+        IM_COL32(50, 50, 50, 255));
+
+    // Logo (if loaded)
+    float curX = titleMin.x + 12.0f;
+    float iconY = titleMin.y + (TITLE_H - 24.0f) * 0.5f;
+    if (m_logoSRV) {
+        dl->AddImage((ImTextureID)(uintptr_t)m_logoSRV,
+            ImVec2(curX, iconY), ImVec2(curX + 24.0f, iconY + 24.0f));
+        curX += 32.0f;
+    }
+
+    // Title text
+    const char* title = "GhostClient";
+    ImVec2 titleTxt = ImGui::CalcTextSize(title);
+    dl->AddText(ImVec2(curX, titleMin.y + (TITLE_H - titleTxt.y) * 0.5f),
+        IM_COL32(220, 220, 220, 255), title);
+
+    // Status pill (attached / waiting / offline)
+    {
+        const char* pillTxt  = m_attached ? "ATTACHED"
+                             : m_autoAttach ? "WAITING" : "OFFLINE";
+        ImU32 pillCol = m_attached  ? IM_COL32(40, 160, 80, 200)
+                      : m_autoAttach ? IM_COL32(180, 140, 30, 200)
+                                     : IM_COL32(80, 80, 80, 200);
+        ImVec2 ps = ImGui::CalcTextSize(pillTxt);
+        float px = curX + titleTxt.x + 10.0f;
+        float py = titleMin.y + (TITLE_H - ps.y - 6.0f) * 0.5f;
+        dl->AddRectFilled(ImVec2(px - 6, py), ImVec2(px + ps.x + 6, py + ps.y + 6),
+            pillCol, 4.0f);
+        dl->AddText(ImVec2(px, py + 3.0f), IM_COL32(255, 255, 255, 230), pillTxt);
+    }
+
+    // Window controls — minimize / close
+    ImGui::SetCursorPos(ImVec2(winW - 76.0f, 0));
+    ImGui::InvisibleButton("##titlespace", ImVec2(winW - 80.0f, TITLE_H));
+
+    auto WinBtn = [&](const char* id, const char* lbl, ImU32 hoverCol) -> bool {
+        ImGui::SameLine(0, 0);
+        ImVec2 bPos = ImGui::GetCursorScreenPos();
+        bool hov = mp.x >= bPos.x && mp.x <= bPos.x + 38.0f
+                && mp.y >= bPos.y && mp.y <= bPos.y + TITLE_H;
+        if (hov) dl->AddRectFilled(bPos, ImVec2(bPos.x + 38.0f, bPos.y + TITLE_H), hoverCol);
+        ImVec2 tc = ImGui::CalcTextSize(lbl);
+        dl->AddText(ImVec2(bPos.x + (38.0f - tc.x) * 0.5f,
+                           bPos.y + (TITLE_H - tc.y) * 0.5f),
+            IM_COL32(200, 200, 200, 255), lbl);
+        ImGui::InvisibleButton(id, ImVec2(38.0f, TITLE_H));
+        return ImGui::IsItemClicked();
+    };
+
+    if (WinBtn("##min", "_", IM_COL32(60, 60, 60, 200)))
+        ShowWindow(m_hwnd, SW_MINIMIZE);
+    if (WinBtn("##close", "x", IM_COL32(180, 40, 40, 220)))
+        PostQuitMessage(0);
+
+    // ── Content area ─────────────────────────────────────────────────
+    ImGui::SetCursorPos(ImVec2(0, TITLE_H));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14, 10));
+    ImGui::BeginChild("##content", ImVec2(0, ImGui::GetContentRegionAvail().y), false);
+    ImGui::PopStyleVar();
 
     RenderMenuBar();
-
-    ImGui::PushFont(nullptr);
-    float titleWidth = ImGui::CalcTextSize("GHOSTCLIENT").x;
-    ImGui::SetCursorPosX((ImGui::GetWindowWidth() - titleWidth) * 0.5f);
-    ImGui::TextUnformatted("GHOSTCLIENT");
-    ImGui::PopFont();
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
 
     if (ImGui::BeginTabBar("##MainTabs", ImGuiTabBarFlags_None)) {
         if (ImGui::BeginTabItem("FFlag Browser")) {
@@ -354,49 +431,41 @@ void GhostGUI::Render() {
 
     RenderStatusBar();
 
+    ImGui::EndChild();
     ImGui::End();
 }
 
 void GhostGUI::RenderMenuBar() {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Process")) {
-            if (ImGui::MenuItem("Attach by Name", nullptr, false, !m_attached)) {
+            if (ImGui::MenuItem("Attach to Roblox", nullptr, false, !m_attached))
                 DoAttach();
-            }
-            ImGui::SetNextItemWidth(100);
+            ImGui::SetNextItemWidth(90);
             ImGui::InputTextWithHint("##PidInput", "PID", m_pidBuf, sizeof(m_pidBuf), ImGuiInputTextFlags_CharsDecimal);
             ImGui::SameLine();
-            if (ImGui::MenuItem("Attach by PID", nullptr, false, !m_attached && m_pidBuf[0] != '\0')) {
+            if (ImGui::MenuItem("Attach by PID", nullptr, false, !m_attached && m_pidBuf[0] != '\0'))
                 DoAttachByPid();
-            }
             ImGui::Separator();
             if (ImGui::MenuItem("Detach", nullptr, false, m_attached)) {
                 m_proc.Detach();
                 m_statusMsg = "Detached";
             }
-            ImGui::Separator();
-            if (ImGui::MenuItem("Exit")) {
-                PostQuitMessage(0);
-            }
             ImGui::EndMenu();
         }
 
-        float indicatorWidth = 200.0f;
-        ImGui::SameLine(ImGui::GetWindowWidth() - indicatorWidth);
-        if (m_attached) {
-            if (m_pendingInject) {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7f, 0.7f, 0.3f, 1.0f));
-                ImGui::TextUnformatted("[INJECTING...]");
-                ImGui::PopStyleColor();
-            } else {
-                ImGui::TextUnformatted("[ATTACHED]");
-            }
-        } else {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.5f, 0.5f, 0.5f, 1.0f));
-            if (m_autoAttach)
-                ImGui::TextUnformatted("[WAITING...]");
-            else
-                ImGui::TextUnformatted("[NOT ATTACHED]");
+        // Pending inject indicator
+        if (m_pendingInject) {
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.75f, 0.2f, 1.0f));
+            ImGui::TextUnformatted("injecting...");
+            ImGui::PopStyleColor();
+        }
+
+        // Fetching indicator
+        if (m_fetchingOffsets.load()) {
+            ImGui::SameLine();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.6f, 1.0f, 1.0f));
+            ImGui::TextUnformatted("fetching offsets...");
             ImGui::PopStyleColor();
         }
 

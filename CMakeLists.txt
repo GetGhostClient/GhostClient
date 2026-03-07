@@ -44,3 +44,15 @@ if(MSVC)
     )
     target_compile_options(ghostclient PRIVATE /W3 /MP)
 endif()
+
+# Embed assets/logo.png as a C byte array at configure time
+execute_process(
+    COMMAND ${CMAKE_COMMAND}
+        -DINPUT=${CMAKE_SOURCE_DIR}/assets/logo.png
+        -DOUTPUT=${CMAKE_SOURCE_DIR}/src/logo_data.h
+        -DVAR_NAME=g_logo_data
+        -P ${CMAKE_SOURCE_DIR}/cmake/embed_file.cmake
+)
+# Re-run if the logo changes
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/assets/logo.png)
