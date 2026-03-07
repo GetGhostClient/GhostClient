@@ -332,16 +332,15 @@ void GhostGUI::Render() {
     ImVec2 titleMax = ImVec2(titleMin.x + winW, titleMin.y + TITLE_H);
 
     ImVec2 mp = ImGui::GetIO().MousePos;
-    // Drag from anywhere that ImGui isn't actively using (inputs, buttons, scrollbars)
-    // WantCaptureMouse becomes true when hovering/clicking widgets — that blocks drag
-    g_draggingHeader = !ImGui::GetIO().WantCaptureMouse;
-
-    // Draw titlebar background
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(titleMin, titleMax,
-        IM_COL32(14, 14, 14, 255));
-    dl->AddLine(ImVec2(titleMin.x, titleMax.y), titleMax,
-        IM_COL32(50, 50, 50, 255));
+
+    // Drag: allow from anywhere NOT over a hovered item and NOT over the btn zone (right 120px)
+    bool overBtnZone = mp.x >= titleMin.x + winW - 120.0f;
+    g_draggingHeader = !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive() && !overBtnZone;
+
+    // Titlebar background
+    dl->AddRectFilled(titleMin, titleMax, IM_COL32(14, 14, 14, 255));
+    dl->AddLine(ImVec2(titleMin.x, titleMax.y), titleMax, IM_COL32(50, 50, 50, 255));
 
     float curX = titleMin.x + 12.0f;
 
@@ -351,42 +350,48 @@ void GhostGUI::Render() {
     dl->AddText(ImVec2(curX, titleMin.y + (TITLE_H - titleTxt.y) * 0.5f),
         IM_COL32(220, 220, 220, 255), title);
 
-    // Status pill (attached / waiting / offline)
+    // Status pill
     {
-        const char* pillTxt  = m_attached ? "ATTACHED"
-                             : m_autoAttach ? "WAITING" : "OFFLINE";
-        ImU32 pillCol = m_attached  ? IM_COL32(40, 160, 80, 200)
+        const char* pillTxt = m_attached ? "ATTACHED"
+                            : m_autoAttach ? "WAITING" : "OFFLINE";
+        ImU32 pillCol = m_attached   ? IM_COL32(40, 160, 80, 200)
                       : m_autoAttach ? IM_COL32(180, 140, 30, 200)
                                      : IM_COL32(80, 80, 80, 200);
         ImVec2 ps = ImGui::CalcTextSize(pillTxt);
         float px = curX + titleTxt.x + 10.0f;
         float py = titleMin.y + (TITLE_H - ps.y - 6.0f) * 0.5f;
-        dl->AddRectFilled(ImVec2(px - 6, py), ImVec2(px + ps.x + 6, py + ps.y + 6),
-            pillCol, 4.0f);
+        dl->AddRectFilled(ImVec2(px - 6, py), ImVec2(px + ps.x + 6, py + ps.y + 6), pillCol, 4.0f);
         dl->AddText(ImVec2(px, py + 3.0f), IM_COL32(255, 255, 255, 230), pillTxt);
     }
 
-    // Window controls — minimize / close
-    ImGui::SetCursorPos(ImVec2(winW - 76.0f, 0));
-    ImGui::InvisibleButton("##titlespace", ImVec2(winW - 80.0f, TITLE_H));
+    // Window control buttons: _ [] X  (each 40px wide)
+    const float BTN_W = 40.0f;
+    float btnX = winW - BTN_W * 3.0f;
 
-    auto WinBtn = [&](const char* id, const char* lbl, ImU32 hoverCol) -> bool {
-        ImGui::SameLine(0, 0);
+    // Place an invisible button covering the drag area so ImGui doesn't count it as "no item"
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    ImGui::InvisibleButton("##drag", ImVec2(btnX, TITLE_H));
+
+    auto WinBtn = [&](const char* id, const char* lbl, ImU32 hoverCol, float xPos) -> bool {
+        ImGui::SetCursorPos(ImVec2(xPos, 0));
         ImVec2 bPos = ImGui::GetCursorScreenPos();
-        bool hov = mp.x >= bPos.x && mp.x <= bPos.x + 38.0f
-                && mp.y >= bPos.y && mp.y <= bPos.y + TITLE_H;
-        if (hov) dl->AddRectFilled(bPos, ImVec2(bPos.x + 38.0f, bPos.y + TITLE_H), hoverCol);
+        bool hov = mp.x >= bPos.x && mp.x < bPos.x + BTN_W
+                && mp.y >= bPos.y && mp.y < bPos.y + TITLE_H;
+        if (hov) dl->AddRectFilled(bPos, ImVec2(bPos.x + BTN_W, bPos.y + TITLE_H), hoverCol);
         ImVec2 tc = ImGui::CalcTextSize(lbl);
-        dl->AddText(ImVec2(bPos.x + (38.0f - tc.x) * 0.5f,
-                           bPos.y + (TITLE_H - tc.y) * 0.5f),
-            IM_COL32(200, 200, 200, 255), lbl);
-        ImGui::InvisibleButton(id, ImVec2(38.0f, TITLE_H));
+        dl->AddText(ImVec2(bPos.x + (BTN_W - tc.x) * 0.5f, bPos.y + (TITLE_H - tc.y) * 0.5f),
+            IM_COL32(210, 210, 210, 255), lbl);
+        ImGui::InvisibleButton(id, ImVec2(BTN_W, TITLE_H));
         return ImGui::IsItemClicked();
     };
 
-    if (WinBtn("##min", "_", IM_COL32(60, 60, 60, 200)))
+    bool isMaximized = IsZoomed(m_hwnd);
+
+    if (WinBtn("##min",  "_",              IM_COL32(55, 55, 55, 220), btnX))
         ShowWindow(m_hwnd, SW_MINIMIZE);
-    if (WinBtn("##close", "x", IM_COL32(180, 40, 40, 220)))
+    if (WinBtn("##max",  isMaximized ? "[]" : "[ ]", IM_COL32(55, 55, 55, 220), btnX + BTN_W))
+        ShowWindow(m_hwnd, isMaximized ? SW_RESTORE : SW_MAXIMIZE);
+    if (WinBtn("##close","×",              IM_COL32(190, 40, 40, 230), btnX + BTN_W * 2.0f))
         PostQuitMessage(0);
 
     // ── Content area ─────────────────────────────────────────────────
