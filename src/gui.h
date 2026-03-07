@@ -6,6 +6,8 @@
 #include <vector>
 #include <deque>
 #include <chrono>
+#include <thread>
+#include <atomic>
 
 class GhostGUI {
 public:
@@ -85,6 +87,13 @@ private:
     bool m_attached = false;
     std::string m_statusMsg;
     std::chrono::steady_clock::time_point m_lastFrame;
+
+    // Background offset auto-fetch
+    std::atomic<bool> m_fetchingOffsets{ false };
+    std::atomic<bool> m_fetchOffsetsDone{ false };
+    std::atomic<bool> m_fetchOffsetsSuccess{ false };
+    std::thread m_fetchThread;
+    void StartAutoFetchOffsets();
 
     // All data stored in %LOCALAPPDATA%\GhostClient
     std::string m_dataDir;

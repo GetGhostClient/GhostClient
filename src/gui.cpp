@@ -50,10 +50,35 @@ GhostGUI::GhostGUI(ProcessManager& proc, FFlagManager& flags)
     LoadConfig();
     AddLog("GhostClient started");
     AddLog("Data dir: " + m_dataDir);
-    AddLog("Loaded " + std::to_string(m_flags.GetTotalCount()) + " FFlag offsets");
+
+    size_t flagCount = m_flags.GetTotalCount();
+    AddLog("Loaded " + std::to_string(flagCount) + " FFlag offsets");
+
+    if (flagCount == 0) {
+        AddLog("[OFFSETS] No offsets found - fetching automatically...");
+        StartAutoFetchOffsets();
+    }
 
     if (m_autoAttach)
         AddLog("Auto-attach enabled - waiting for RobloxPlayerBeta.exe...");
+}
+
+void GhostGUI::StartAutoFetchOffsets() {
+    if (m_fetchingOffsets.load()) return;
+    m_fetchingOffsets = true;
+    m_fetchOffsetsDone = false;
+    m_fetchOffsetsSuccess = false;
+    m_statusMsg = "Downloading offsets...";
+
+    if (m_fetchThread.joinable())
+        m_fetchThread.detach();
+
+    m_fetchThread = std::thread([this]() {
+        bool ok = m_flags.FetchAndUpdateOffsets();
+        m_fetchOffsetsSuccess = ok;
+        m_fetchOffsetsDone = true;
+        m_fetchingOffsets = false;
+    });
 }
 
 void GhostGUI::AddLog(const std::string& msg) {
@@ -153,6 +178,19 @@ void GhostGUI::Render() {
     auto now = std::chrono::steady_clock::now();
     float dt = std::chrono::duration<float>(now - m_lastFrame).count();
     m_lastFrame = now;
+
+    // Handle background offset fetch completion
+    if (m_fetchOffsetsDone.load()) {
+        m_fetchOffsetsDone = false;
+        if (m_fetchOffsetsSuccess.load()) {
+            m_statusMsg = "Offsets downloaded: " + std::to_string(m_flags.GetTotalCount()) + " flags";
+            AddLog("[OFFSETS] Auto-fetch complete: " + std::to_string(m_flags.GetTotalCount()) + " flags loaded");
+            m_needsRefresh = true;
+        } else {
+            m_statusMsg = "Failed to download offsets - check connection";
+            AddLog("[OFFSETS] Auto-fetch failed - use Settings > Update Offsets to retry");
+        }
+    }
 
     m_attached = m_proc.IsAttached();
 
@@ -617,13 +655,14 @@ void GhostGUI::RenderSettingsTab() {
         ImGui::PopStyleColor();
     }
 
-    if (ImGui::Button("Update Offsets from API", ImVec2(220, 0))) {
-        AddLog("[UPDATE] Starting offset update...");
-        if (m_flags.FetchAndUpdateOffsets()) {
-            m_statusMsg = "Offsets updated: " + std::to_string(m_flags.GetTotalCount()) + " flags";
-            m_needsRefresh = true;
-        } else {
-            m_statusMsg = "Offset update failed";
+    if (m_fetchingOffsets.load()) {
+        ImGui::BeginDisabled();
+        ImGui::Button("Downloading...", ImVec2(220, 0));
+        ImGui::EndDisabled();
+    } else {
+        if (ImGui::Button("Update Offsets from API", ImVec2(220, 0))) {
+            AddLog("[UPDATE] Starting offset update...");
+            StartAutoFetchOffsets();
         }
     }
     ImGui::SameLine();
