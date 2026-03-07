@@ -351,7 +351,6 @@ static bool ParseFlagsJson(const std::string& body,
     // Advance past outer "FFlagOffsets" if the first hit is a false match
     // (in practice "FFlags" only appears once, so this is safe)
     if (fpos == std::string::npos) {
-        Log("[PARSE] \"FFlags\" key not found in JSON");
         return false;
     }
 
@@ -378,7 +377,6 @@ static bool ParseFlagsJson(const std::string& body,
     }
 
     if (objEnd == std::string::npos) {
-        Log("[PARSE] Could not find closing brace for FFlags object");
         return false;
     }
 
