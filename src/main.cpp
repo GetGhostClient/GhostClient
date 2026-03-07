@@ -182,8 +182,9 @@ static void CleanupRenderTarget() {
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-// Exposed so GhostGUI can tell us when the user is hovering the drag region
-bool g_draggingHeader = false;
+// Set by GhostGUI each frame: screen-space rect of the button zone (minimize/max/close)
+// so WM_NCHITTEST can exclude it from HTCAPTION.
+RECT g_btnZoneScreen = {};  // {left,top,right,bottom} in screen coords
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
@@ -201,22 +202,25 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (wParam) return 0;
         break;
     case WM_NCHITTEST: {
-        // Resize border detection (since WM_NCCALCSIZE ate the frame, do it manually)
         RECT rc; GetWindowRect(hWnd, &rc);
         int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
-        const int B = 6; // resize border thickness
+        const int B = 6;
         bool L = x < rc.left   + B, R = x >= rc.right  - B;
         bool T = y < rc.top    + B, Bo = y >= rc.bottom - B;
-        if (L  && T)  return HTTOPLEFT;
-        if (R  && T)  return HTTOPRIGHT;
-        if (L  && Bo) return HTBOTTOMLEFT;
-        if (R  && Bo) return HTBOTTOMRIGHT;
+        if (L && T)   return HTTOPLEFT;
+        if (R && T)   return HTTOPRIGHT;
+        if (L && Bo)  return HTBOTTOMLEFT;
+        if (R && Bo)  return HTBOTTOMRIGHT;
         if (L)        return HTLEFT;
         if (R)        return HTRIGHT;
         if (T)        return HTTOP;
         if (Bo)       return HTBOTTOM;
-        // Drag anywhere the ImGui layer isn't consuming mouse
-        if (g_draggingHeader) return HTCAPTION;
+        // Title bar drag zone: top 40px, excluding the button zone on the right
+        const int TITLE_H = 40;
+        bool inTitleRow  = (y < rc.top + TITLE_H);
+        bool inBtnZone   = (x >= g_btnZoneScreen.left && x < g_btnZoneScreen.right
+                         && y >= g_btnZoneScreen.top  && y < g_btnZoneScreen.bottom);
+        if (inTitleRow && !inBtnZone) return HTCAPTION;
         return HTCLIENT;
     }
     case WM_SYSCOMMAND:

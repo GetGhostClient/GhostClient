@@ -306,7 +306,7 @@ void GhostGUI::Render() {
         }
     }
 
-    extern bool g_draggingHeader;
+    extern RECT g_btnZoneScreen;
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -333,10 +333,6 @@ void GhostGUI::Render() {
 
     ImVec2 mp = ImGui::GetIO().MousePos;
     ImDrawList* dl = ImGui::GetWindowDrawList();
-
-    // Drag: allow from anywhere NOT over a hovered item and NOT over the btn zone (right 120px)
-    bool overBtnZone = mp.x >= titleMin.x + winW - 120.0f;
-    g_draggingHeader = !ImGui::IsAnyItemHovered() && !ImGui::IsAnyItemActive() && !overBtnZone;
 
     // Titlebar background
     dl->AddRectFilled(titleMin, titleMax, IM_COL32(14, 14, 14, 255));
@@ -368,12 +364,16 @@ void GhostGUI::Render() {
     const float BTN_W = 40.0f;
     float btnX = winW - BTN_W * 3.0f;
 
-    // Place an invisible button covering the drag area so ImGui doesn't count it as "no item"
-    ImGui::SetCursorPos(ImVec2(0, 0));
-    ImGui::InvisibleButton("##drag", ImVec2(btnX, TITLE_H));
+    // Tell WndProc exactly where the buttons are (screen coords) so it can exclude them from drag
+    {
+        ImVec2 btnScreenMin = ImVec2(titleMin.x + btnX, titleMin.y);
+        ImVec2 btnScreenMax = ImVec2(titleMin.x + winW, titleMin.y + TITLE_H);
+        g_btnZoneScreen = { (LONG)btnScreenMin.x, (LONG)btnScreenMin.y,
+                            (LONG)btnScreenMax.x, (LONG)btnScreenMax.y };
+    }
 
-    auto WinBtn = [&](const char* id, const char* lbl, ImU32 hoverCol, float xPos) -> bool {
-        ImGui::SetCursorPos(ImVec2(xPos, 0));
+    // Render buttons sequentially from btnX
+    auto WinBtn = [&](const char* id, const char* lbl, ImU32 hoverCol) -> bool {
         ImVec2 bPos = ImGui::GetCursorScreenPos();
         bool hov = mp.x >= bPos.x && mp.x < bPos.x + BTN_W
                 && mp.y >= bPos.y && mp.y < bPos.y + TITLE_H;
@@ -382,16 +382,19 @@ void GhostGUI::Render() {
         dl->AddText(ImVec2(bPos.x + (BTN_W - tc.x) * 0.5f, bPos.y + (TITLE_H - tc.y) * 0.5f),
             IM_COL32(210, 210, 210, 255), lbl);
         ImGui::InvisibleButton(id, ImVec2(BTN_W, TITLE_H));
-        return ImGui::IsItemClicked();
+        bool clicked = ImGui::IsItemClicked();
+        ImGui::SameLine(0, 0);
+        return clicked;
     };
 
     bool isMaximized = IsZoomed(m_hwnd);
+    ImGui::SetCursorPos(ImVec2(btnX, 0));
 
-    if (WinBtn("##min",  "_",              IM_COL32(55, 55, 55, 220), btnX))
+    if (WinBtn("##min",   "_",                         IM_COL32(55, 55, 55, 220)))
         ShowWindow(m_hwnd, SW_MINIMIZE);
-    if (WinBtn("##max",  isMaximized ? "[]" : "[ ]", IM_COL32(55, 55, 55, 220), btnX + BTN_W))
+    if (WinBtn("##max",   isMaximized ? "[]" : "[ ]",  IM_COL32(55, 55, 55, 220)))
         ShowWindow(m_hwnd, isMaximized ? SW_RESTORE : SW_MAXIMIZE);
-    if (WinBtn("##close","×",              IM_COL32(190, 40, 40, 230), btnX + BTN_W * 2.0f))
+    if (WinBtn("##close", "x",                         IM_COL32(190, 40, 40, 230)))
         PostQuitMessage(0);
 
     // ── Content area ─────────────────────────────────────────────────
