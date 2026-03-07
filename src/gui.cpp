@@ -227,6 +227,7 @@ void GhostGUI::Render() {
             if (m_proc.Attach(L"RobloxPlayerBeta.exe")) {
                 m_flags.CheckVersion();
                 m_attached = true;
+                m_offsetUpdateTriggered = false;
                 m_statusMsg = "Auto-attached (PID: " + std::to_string(m_proc.GetProcessId()) + ")";
                 AddLog("[AUTO] Attached to Roblox (PID: " + std::to_string(m_proc.GetProcessId()) + ")");
                 m_needsRefresh = true;
@@ -246,9 +247,30 @@ void GhostGUI::Render() {
         AddLog("[AUTO] Roblox process lost");
         m_pendingInject = false;
         m_injectAttempts = 0;
+        m_offsetUpdateTriggered = false;
         m_statusMsg = "Roblox disconnected";
     }
     m_wasAttached = m_attached;
+
+    // Auto-update offsets when version mismatch is detected after attach
+    if (m_autoUpdateOffsets && m_attached && !m_fetchingOffsets.load()
+        && !m_offsetUpdateTriggered && !m_flags.IsVersionMatch()
+        && m_flags.GetTotalCount() > 0)
+    {
+        m_offsetUpdateTriggered = true;
+        AddLog("[OFFSETS] Version mismatch detected - fetching latest offsets automatically...");
+        StartAutoFetchOffsets();
+    }
+
+    // Auto-read: periodically read all visible flag values
+    if (m_autoRead && m_attached && !m_filteredFlags.empty()) {
+        m_autoReadTimer += dt;
+        if (m_autoReadTimer >= m_autoReadInterval) {
+            m_autoReadTimer = 0.0f;
+            for (auto* entry : m_filteredFlags)
+                m_flags.ReadFlagValue(*entry);
+        }
+    }
 
     // Delayed/repeated injection: wait for flags to initialize, then inject
     if (m_pendingInject && m_attached) {
@@ -417,10 +439,14 @@ void GhostGUI::RenderBrowserTab() {
     ImGui::Spacing();
 
     if (m_attached) {
-        if (ImGui::Button("Read All Values")) {
+        if (ImGui::Button("Read All Now")) {
             for (auto* entry : m_filteredFlags)
                 m_flags.ReadFlagValue(*entry);
             m_statusMsg = "Read " + std::to_string(m_filteredFlags.size()) + " flag values";
+        }
+        if (m_autoRead) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(auto-reading every %.1fs)", m_autoReadInterval);
         }
     }
 
@@ -638,6 +664,23 @@ void GhostGUI::RenderSettingsTab() {
     ImGui::TextDisabled("  Waits for flags to initialize, then injects repeatedly until they stick");
 
     ImGui::Spacing();
+
+    ImGui::Checkbox("Auto-read FFlag values", &m_autoRead);
+    ImGui::TextDisabled("  Continuously reads visible flag values while attached");
+    if (m_autoRead) {
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80);
+        ImGui::SliderFloat("##ReadInterval", &m_autoReadInterval, 0.5f, 10.0f, "%.1fs");
+        ImGui::SameLine();
+        ImGui::TextDisabled("interval");
+    }
+
+    ImGui::Spacing();
+
+    ImGui::Checkbox("Auto-update offsets on version mismatch", &m_autoUpdateOffsets);
+    ImGui::TextDisabled("  Fetches latest offsets automatically when Roblox has updated");
+
+    ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
 
@@ -726,6 +769,7 @@ void GhostGUI::RenderSettingsTab() {
 void GhostGUI::DoAttach() {
     if (m_proc.Attach(L"RobloxPlayerBeta.exe")) {
         m_flags.CheckVersion();
+        m_offsetUpdateTriggered = false;
         m_statusMsg = "Attached (PID: " + std::to_string(m_proc.GetProcessId()) + ")";
         m_needsRefresh = true;
     } else {

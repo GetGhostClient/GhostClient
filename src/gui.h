@@ -71,6 +71,15 @@ private:
     static constexpr float AUTO_ATTACH_INTERVAL = 2.0f;
     bool m_wasAttached = false;
 
+    // Auto-read state
+    bool m_autoRead = true;
+    float m_autoReadTimer = 0.0f;
+    float m_autoReadInterval = 2.0f;
+
+    // Auto-update offsets on mismatch
+    bool m_autoUpdateOffsets = true;
+    bool m_offsetUpdateTriggered = false;
+
     // Re-injection state: wait for flags to initialize, then inject repeatedly
     bool m_pendingInject = false;
     float m_injectDelayTimer = 0.0f;
