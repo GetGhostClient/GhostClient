@@ -33,12 +33,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = L"GhostClientClass";
-    wc.hIcon   = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_APPICON));
-    wc.hIconSm = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_APPICON));
+    HICON hAppIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_APPICON));
+    wc.hIcon   = hAppIcon;
+    wc.hIconSm = hAppIcon;
     RegisterClassExW(&wc);
 
     HWND hwnd = CreateWindowExW(
-        WS_EX_APPWINDOW, wc.lpszClassName, L"GhostClient",
+        WS_EX_APPWINDOW, wc.lpszClassName, L"Ghost Client",
         WS_POPUP | WS_THICKFRAME,
         100, 100, 1100, 700,
         nullptr, nullptr, wc.hInstance, nullptr);
@@ -52,6 +53,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
         UnregisterClassW(wc.lpszClassName, wc.hInstance);
         return 1;
     }
+
+    // Explicitly set icon on the window handle so alt-tab thumbnail shows it
+    SendMessageW(hwnd, WM_SETICON, ICON_BIG,   (LPARAM)hAppIcon);
+    SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hAppIcon);
 
     ShowWindow(hwnd, SW_SHOWDEFAULT);
     UpdateWindow(hwnd);
@@ -187,19 +192,10 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 RECT g_btnZoneScreen = {};  // {left,top,right,bottom} in screen coords
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
-        return true;
-
+    // Handle these BEFORE ImGui so our custom hit-testing takes precedence
     switch (msg) {
-    case WM_SIZE:
-        if (wParam == SIZE_MINIMIZED)
-            return 0;
-        g_ResizeWidth = (UINT)LOWORD(lParam);
-        g_ResizeHeight = (UINT)HIWORD(lParam);
-        return 0;
     case WM_NCCALCSIZE:
-        // Returning 0 when wParam=TRUE zeroes the non-client area → no white bar
-        if (wParam) return 0;
+        if (wParam) return 0;  // zero non-client area → no white bar
         break;
     case WM_NCHITTEST: {
         RECT rc; GetWindowRect(hWnd, &rc);
@@ -215,15 +211,28 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (R)        return HTRIGHT;
         if (T)        return HTTOP;
         if (Bo)       return HTBOTTOM;
-        // Button zone always goes to client so ImGui can handle clicks
+        // Button zone → HTCLIENT so ImGui receives mouse events for the buttons
         bool inBtnZone = (x >= g_btnZoneScreen.left && x < g_btnZoneScreen.right
                        && y >= g_btnZoneScreen.top  && y < g_btnZoneScreen.bottom);
         if (inBtnZone) return HTCLIENT;
-        // Rest of title bar row (top 40px) is draggable
+        // Title bar row → draggable
         const int TITLE_H = 40;
         if (y < rc.top + TITLE_H) return HTCAPTION;
         return HTCLIENT;
     }
+    default: break;
+    }
+
+    if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
+        return true;
+
+    switch (msg) {
+    case WM_SIZE:
+        if (wParam == SIZE_MINIMIZED)
+            return 0;
+        g_ResizeWidth = (UINT)LOWORD(lParam);
+        g_ResizeHeight = (UINT)HIWORD(lParam);
+        return 0;
     case WM_SYSCOMMAND:
         if ((wParam & 0xfff0) == SC_KEYMENU)
             return 0;

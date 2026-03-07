@@ -46,7 +46,7 @@ GhostGUI::GhostGUI(ProcessManager& proc, FFlagManager& flags)
     }
 
     LoadConfig();
-    AddLog("GhostClient started");
+    AddLog("Ghost Client started");
     AddLog("Data dir: " + m_dataDir);
 
     size_t flagCount = m_flags.GetTotalCount();
@@ -120,18 +120,17 @@ void GhostGUI::ApplyTheme() {
     ImGuiStyle& style = ImGui::GetStyle();
     ImVec4* c = style.Colors;
 
-    // Palette
-    const ImVec4 bg0        = ImVec4(0.05f, 0.05f, 0.05f, 1.00f); // deepest bg
-    const ImVec4 bg1        = ImVec4(0.09f, 0.09f, 0.09f, 1.00f); // panel bg
-    const ImVec4 bg2        = ImVec4(0.13f, 0.13f, 0.13f, 1.00f); // input/frame bg
-    const ImVec4 border     = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-    const ImVec4 hover      = ImVec4(0.22f, 0.22f, 0.22f, 1.00f);
-    const ImVec4 active     = ImVec4(0.28f, 0.28f, 0.28f, 1.00f);
-    const ImVec4 text       = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
-    const ImVec4 textDim    = ImVec4(0.45f, 0.45f, 0.45f, 1.00f);
-    const ImVec4 accent     = ImVec4(0.35f, 0.60f, 1.00f, 1.00f); // blue accent
-    const ImVec4 accentDim  = ImVec4(0.25f, 0.45f, 0.80f, 1.00f);
-    const ImVec4 none       = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    // Pure monochrome palette — no hue anywhere
+    const ImVec4 bg0     = ImVec4(0.04f, 0.04f, 0.04f, 1.00f); // near black
+    const ImVec4 bg1     = ImVec4(0.09f, 0.09f, 0.09f, 1.00f); // dark grey
+    const ImVec4 bg2     = ImVec4(0.14f, 0.14f, 0.14f, 1.00f); // mid grey (frames/inputs)
+    const ImVec4 bg3     = ImVec4(0.20f, 0.20f, 0.20f, 1.00f); // lighter grey (hover)
+    const ImVec4 bg4     = ImVec4(0.28f, 0.28f, 0.28f, 1.00f); // active/pressed
+    const ImVec4 border  = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
+    const ImVec4 text    = ImVec4(0.95f, 0.95f, 0.95f, 1.00f); // near white
+    const ImVec4 textDim = ImVec4(0.40f, 0.40f, 0.40f, 1.00f); // muted grey
+    const ImVec4 white   = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
+    const ImVec4 none    = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
 
     c[ImGuiCol_Text]                 = text;
     c[ImGuiCol_TextDisabled]         = textDim;
@@ -141,33 +140,33 @@ void GhostGUI::ApplyTheme() {
     c[ImGuiCol_Border]               = border;
     c[ImGuiCol_BorderShadow]         = none;
     c[ImGuiCol_FrameBg]              = bg2;
-    c[ImGuiCol_FrameBgHovered]       = hover;
-    c[ImGuiCol_FrameBgActive]        = active;
+    c[ImGuiCol_FrameBgHovered]       = bg3;
+    c[ImGuiCol_FrameBgActive]        = bg4;
     c[ImGuiCol_TitleBg]              = bg1;
     c[ImGuiCol_TitleBgActive]        = bg1;
     c[ImGuiCol_TitleBgCollapsed]     = bg0;
     c[ImGuiCol_MenuBarBg]            = bg1;
     c[ImGuiCol_ScrollbarBg]          = bg0;
-    c[ImGuiCol_ScrollbarGrab]        = bg2;
-    c[ImGuiCol_ScrollbarGrabHovered] = hover;
-    c[ImGuiCol_ScrollbarGrabActive]  = active;
-    c[ImGuiCol_CheckMark]            = accent;
-    c[ImGuiCol_SliderGrab]           = accentDim;
-    c[ImGuiCol_SliderGrabActive]     = accent;
+    c[ImGuiCol_ScrollbarGrab]        = bg3;
+    c[ImGuiCol_ScrollbarGrabHovered] = bg4;
+    c[ImGuiCol_ScrollbarGrabActive]  = white;
+    c[ImGuiCol_CheckMark]            = white;
+    c[ImGuiCol_SliderGrab]           = bg4;
+    c[ImGuiCol_SliderGrabActive]     = white;
     c[ImGuiCol_Button]               = bg2;
-    c[ImGuiCol_ButtonHovered]        = hover;
-    c[ImGuiCol_ButtonActive]         = active;
+    c[ImGuiCol_ButtonHovered]        = bg3;
+    c[ImGuiCol_ButtonActive]         = bg4;
     c[ImGuiCol_Header]               = bg2;
-    c[ImGuiCol_HeaderHovered]        = hover;
-    c[ImGuiCol_HeaderActive]         = active;
+    c[ImGuiCol_HeaderHovered]        = bg3;
+    c[ImGuiCol_HeaderActive]         = bg4;
     c[ImGuiCol_Separator]            = border;
-    c[ImGuiCol_SeparatorHovered]     = accentDim;
-    c[ImGuiCol_SeparatorActive]      = accent;
+    c[ImGuiCol_SeparatorHovered]     = bg3;
+    c[ImGuiCol_SeparatorActive]      = white;
     c[ImGuiCol_ResizeGrip]           = none;
-    c[ImGuiCol_ResizeGripHovered]    = accentDim;
-    c[ImGuiCol_ResizeGripActive]     = accent;
+    c[ImGuiCol_ResizeGripHovered]    = bg3;
+    c[ImGuiCol_ResizeGripActive]     = white;
     c[ImGuiCol_Tab]                  = bg1;
-    c[ImGuiCol_TabHovered]           = hover;
+    c[ImGuiCol_TabHovered]           = bg3;
     c[ImGuiCol_TabSelected]          = bg2;
     c[ImGuiCol_TabDimmed]            = bg1;
     c[ImGuiCol_TabDimmedSelected]    = bg2;
@@ -175,17 +174,17 @@ void GhostGUI::ApplyTheme() {
     c[ImGuiCol_TableBorderStrong]    = border;
     c[ImGuiCol_TableBorderLight]     = bg2;
     c[ImGuiCol_TableRowBg]           = none;
-    c[ImGuiCol_TableRowBgAlt]        = ImVec4(0.08f, 0.08f, 0.08f, 1.00f);
-    c[ImGuiCol_TextSelectedBg]       = ImVec4(0.35f, 0.60f, 1.00f, 0.30f);
-    c[ImGuiCol_NavHighlight]         = accent;
+    c[ImGuiCol_TableRowBgAlt]        = ImVec4(0.07f, 0.07f, 0.07f, 1.00f);
+    c[ImGuiCol_TextSelectedBg]       = ImVec4(1.00f, 1.00f, 1.00f, 0.18f);
+    c[ImGuiCol_NavHighlight]         = white;
 
-    style.WindowRounding    = 6.0f;
-    style.ChildRounding     = 4.0f;
-    style.FrameRounding     = 4.0f;
-    style.GrabRounding      = 4.0f;
-    style.TabRounding       = 4.0f;
-    style.PopupRounding     = 4.0f;
-    style.ScrollbarRounding = 4.0f;
+    style.WindowRounding    = 4.0f;
+    style.ChildRounding     = 3.0f;
+    style.FrameRounding     = 3.0f;
+    style.GrabRounding      = 3.0f;
+    style.TabRounding       = 3.0f;
+    style.PopupRounding     = 3.0f;
+    style.ScrollbarRounding = 3.0f;
     style.WindowPadding     = ImVec2(14, 14);
     style.FramePadding      = ImVec2(8, 4);
     style.ItemSpacing       = ImVec2(8, 5);
@@ -341,18 +340,18 @@ void GhostGUI::Render() {
     float curX = titleMin.x + 12.0f;
 
     // Title text
-    const char* title = "GhostClient";
+    const char* title = "Ghost Client";
     ImVec2 titleTxt = ImGui::CalcTextSize(title);
     dl->AddText(ImVec2(curX, titleMin.y + (TITLE_H - titleTxt.y) * 0.5f),
         IM_COL32(220, 220, 220, 255), title);
 
-    // Status pill
+    // Status pill — monochrome
     {
         const char* pillTxt = m_attached ? "ATTACHED"
                             : m_autoAttach ? "WAITING" : "OFFLINE";
-        ImU32 pillCol = m_attached   ? IM_COL32(40, 160, 80, 200)
-                      : m_autoAttach ? IM_COL32(180, 140, 30, 200)
-                                     : IM_COL32(80, 80, 80, 200);
+        ImU32 pillCol = m_attached   ? IM_COL32(80, 80, 80, 220)
+                      : m_autoAttach ? IM_COL32(50, 50, 50, 220)
+                                     : IM_COL32(30, 30, 30, 220);
         ImVec2 ps = ImGui::CalcTextSize(pillTxt);
         float px = curX + titleTxt.x + 10.0f;
         float py = titleMin.y + (TITLE_H - ps.y - 6.0f) * 0.5f;
@@ -453,20 +452,13 @@ void GhostGUI::RenderMenuBar() {
             ImGui::EndMenu();
         }
 
-        // Pending inject indicator
         if (m_pendingInject) {
             ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.75f, 0.2f, 1.0f));
-            ImGui::TextUnformatted("injecting...");
-            ImGui::PopStyleColor();
+            ImGui::TextDisabled("injecting...");
         }
-
-        // Fetching indicator
         if (m_fetchingOffsets.load()) {
             ImGui::SameLine();
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.6f, 1.0f, 1.0f));
-            ImGui::TextUnformatted("fetching offsets...");
-            ImGui::PopStyleColor();
+            ImGui::TextDisabled("fetching offsets...");
         }
 
         ImGui::EndMenuBar();
@@ -477,15 +469,16 @@ void GhostGUI::RenderStatusBar() {
     ImGui::Spacing();
     ImGui::Separator();
 
-    if (!m_flags.IsVersionMatch() && !m_flags.GetVersionMismatchMsg().empty()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.4f, 0.1f, 1.0f));
-        ImGui::TextUnformatted(m_flags.GetVersionMismatchMsg().c_str());
-        ImGui::PopStyleColor();
-    }
+    if (!m_flags.IsVersionMatch() && !m_flags.GetVersionMismatchMsg().empty())
+        ImGui::TextDisabled("%s", m_flags.GetVersionMismatchMsg().c_str());
 
-    ImGui::TextDisabled("FFlags: %zu | Version: %s | PID: %lu",
+    std::string ver = m_flags.GetExpectedVersion();
+    const char* verStr = m_fetchingOffsets.load()          ? "fetching..."
+                       : (ver.empty() || ver == "unknown") ? "no offsets"
+                                                           : ver.c_str();
+    ImGui::TextDisabled("FFlags: %zu  |  Version: %s  |  PID: %lu",
         m_flags.GetTotalCount(),
-        m_flags.GetExpectedVersion().c_str(),
+        verStr,
         m_attached ? (unsigned long)m_proc.GetProcessId() : 0UL);
 
     if (!m_statusMsg.empty()) {
@@ -561,13 +554,13 @@ void GhostGUI::RenderBrowserTab() {
 
                 ImGui::TableSetColumnIndex(3);
                 ImGui::PushID(row);
-                static char valueBuf[256] = {};
+                // Per-row buffer — must NOT be static (static = shared across all rows)
+                char valueBuf[256] = {};
                 ImGui::SetNextItemWidth(-1);
                 if (ImGui::InputTextWithHint("##val", "value", valueBuf, sizeof(valueBuf), ImGuiInputTextFlags_EnterReturnsTrue)) {
                     if (m_attached && valueBuf[0] != '\0') {
                         if (m_flags.WriteFlagValue(entry->name, valueBuf))
                             m_flags.ReadFlagValue(*entry);
-                        valueBuf[0] = '\0';
                     }
                 }
                 ImGui::PopID();
@@ -777,15 +770,16 @@ void GhostGUI::RenderSettingsTab() {
     ImGui::TextUnformatted("Offsets");
     ImGui::Spacing();
 
-    ImGui::TextDisabled("  Built-in offsets: %s (%zu flags)",
-        m_flags.GetExpectedVersion().c_str(),
-        m_flags.GetTotalCount());
-
-    if (!m_flags.IsVersionMatch() && !m_flags.GetVersionMismatchMsg().empty()) {
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.4f, 0.1f, 1.0f));
-        ImGui::TextWrapped("  %s", m_flags.GetVersionMismatchMsg().c_str());
-        ImGui::PopStyleColor();
+    {
+        std::string ov = m_flags.GetExpectedVersion();
+        const char* ovStr = m_fetchingOffsets.load()           ? "fetching..."
+                          : (ov.empty() || ov == "unknown")    ? "no offsets loaded"
+                                                               : ov.c_str();
+        ImGui::TextDisabled("  Loaded: %s  (%zu flags)", ovStr, m_flags.GetTotalCount());
     }
+
+    if (!m_flags.IsVersionMatch() && !m_flags.GetVersionMismatchMsg().empty())
+        ImGui::TextDisabled("  %s", m_flags.GetVersionMismatchMsg().c_str());
 
     if (m_fetchingOffsets.load()) {
         ImGui::BeginDisabled();
