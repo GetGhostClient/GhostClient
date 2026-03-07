@@ -283,89 +283,150 @@ static std::string WinHttpGet(const std::wstring& host, const std::wstring& path
 }
 
 bool FFlagManager::FetchLatestVersion(std::string& outVersion) {
-    Log("[UPDATE] Fetching latest Roblox version from offsets API...");
+    Log("[UPDATE] Fetching latest Roblox version from imtheo.lol...");
     std::string body = WinHttpGet(
-        L"offsets.ntgetwritewatch.workers.dev",
-        L"/version");
+        L"imtheo.lol",
+        L"/Offsets/FFlags.json");
 
-    while (!body.empty() && (body.back() == '\n' || body.back() == '\r' || body.back() == ' '))
-        body.pop_back();
-    while (!body.empty() && (body.front() == '\n' || body.front() == '\r' || body.front() == ' '))
-        body.erase(body.begin());
-
-    if (body.empty() || body.find("version-") == std::string::npos) {
-        Log("[UPDATE] Failed to fetch version");
+    if (body.empty()) {
+        Log("[UPDATE] Failed to fetch FFlags.json for version check");
         return false;
     }
 
-    outVersion = body;
+    // Extract "Roblox Version" field
+    const std::string key = "\"Roblox Version\"";
+    auto kpos = body.find(key);
+    if (kpos == std::string::npos) {
+        Log("[UPDATE] Version key not found in FFlags.json");
+        return false;
+    }
+    auto colon = body.find(':', kpos + key.size());
+    if (colon == std::string::npos) return false;
+    auto q1 = body.find('"', colon + 1);
+    if (q1 == std::string::npos) return false;
+    auto q2 = body.find('"', q1 + 1);
+    if (q2 == std::string::npos) return false;
+
+    outVersion = body.substr(q1 + 1, q2 - q1 - 1);
+    if (outVersion.find("version-") == std::string::npos) {
+        Log("[UPDATE] Unexpected version format: " + outVersion);
+        return false;
+    }
+
     Log("[UPDATE] Latest version: " + outVersion);
     return true;
 }
 
-// Parses a FFlags.hpp body into a flag map and version string.
-static bool ParseFlagsHpp(const std::string& body,
+// Parses FFlags.json from imtheo.lol/Offsets into a flag map and version string.
+// JSON structure:
+//   { "Roblox Version": "version-xxx", ...,
+//     "FFlagOffsets": { "FFlagList": {...}, "FFlags": { "Name": 123456, ... } } }
+//
+// Uses a hand-rolled parser to avoid adding a JSON library dependency.
+static bool ParseFlagsJson(const std::string& body,
     std::unordered_map<std::string, uintptr_t>& outFlags,
     std::string& outVersion)
 {
-    std::istringstream stream(body);
-    std::string line;
-    bool inFFlagOffsets = false;
-    bool passedFFlagOffsets = false;
-
-    while (std::getline(stream, line)) {
-        if (outVersion.empty()) {
-            // Handles both:
-            //   /* Roblox Version  : version-xxxxx  (RbxDumperV2 header style)
-            //   any line containing version-xxxxx
-            auto vpos = line.find("version-");
-            if (vpos != std::string::npos) {
-                // find end of the token — stop at whitespace or comment chars
-                auto end = line.find_first_of(" \t\r\n\"'/*", vpos + 8);
-                outVersion = line.substr(vpos, end == std::string::npos ? std::string::npos : end - vpos);
+    // ── Extract top-level "Roblox Version" ──────────────────────────────
+    {
+        const std::string vkey = "\"Roblox Version\"";
+        auto kp = body.find(vkey);
+        if (kp != std::string::npos) {
+            auto col = body.find(':', kp + vkey.size());
+            if (col != std::string::npos) {
+                auto q1 = body.find('"', col + 1);
+                if (q1 != std::string::npos) {
+                    auto q2 = body.find('"', q1 + 1);
+                    if (q2 != std::string::npos)
+                        outVersion = body.substr(q1 + 1, q2 - q1 - 1);
+                }
             }
         }
+    }
 
-        if (line.find("namespace FFlagOffsets") != std::string::npos) {
-            inFFlagOffsets = true;
+    // ── Locate the "FFlags" object inside "FFlagOffsets" ────────────────
+    // We specifically want "FFlags" to skip "FFlagList"
+    const std::string fkey = "\"FFlags\"";
+    auto fpos = body.find(fkey);
+    // Advance past outer "FFlagOffsets" if the first hit is a false match
+    // (in practice "FFlags" only appears once, so this is safe)
+    if (fpos == std::string::npos) {
+        Log("[PARSE] \"FFlags\" key not found in JSON");
+        return false;
+    }
+
+    auto objStart = body.find('{', fpos + fkey.size());
+    if (objStart == std::string::npos) return false;
+
+    // Find the matching closing brace
+    size_t depth = 1;
+    size_t pos = objStart + 1;
+    size_t objEnd = std::string::npos;
+    while (pos < body.size() && depth > 0) {
+        char c = body[pos];
+        if (c == '{') depth++;
+        else if (c == '}') { depth--; if (depth == 0) { objEnd = pos; break; } }
+        else if (c == '"') {
+            // skip string contents
+            ++pos;
+            while (pos < body.size() && body[pos] != '"') {
+                if (body[pos] == '\\') ++pos; // escape
+                ++pos;
+            }
+        }
+        ++pos;
+    }
+
+    if (objEnd == std::string::npos) {
+        Log("[PARSE] Could not find closing brace for FFlags object");
+        return false;
+    }
+
+    std::string fflagsBody = body.substr(objStart + 1, objEnd - objStart - 1);
+
+    // ── Parse "Name": number pairs ──────────────────────────────────────
+    size_t p = 0;
+    while (p < fflagsBody.size()) {
+        // Find next key
+        auto q1 = fflagsBody.find('"', p);
+        if (q1 == std::string::npos) break;
+        auto q2 = fflagsBody.find('"', q1 + 1);
+        if (q2 == std::string::npos) break;
+
+        std::string name = fflagsBody.substr(q1 + 1, q2 - q1 - 1);
+        p = q2 + 1;
+
+        // Find colon, then value
+        auto col = fflagsBody.find(':', p);
+        if (col == std::string::npos) break;
+        p = col + 1;
+
+        // Skip whitespace
+        while (p < fflagsBody.size() && (fflagsBody[p] == ' ' || fflagsBody[p] == '\t'
+            || fflagsBody[p] == '\r' || fflagsBody[p] == '\n'))
+            ++p;
+
+        if (p >= fflagsBody.size()) break;
+
+        // Parse integer value (decimal)
+        bool negative = (fflagsBody[p] == '-');
+        if (negative) ++p;
+
+        if (p >= fflagsBody.size() || !std::isdigit((unsigned char)fflagsBody[p])) {
+            // Skip non-numeric values (shouldn't happen but be safe)
+            auto next = fflagsBody.find(',', p);
+            p = (next == std::string::npos) ? fflagsBody.size() : next + 1;
             continue;
         }
-        if (inFFlagOffsets && line.find('}') != std::string::npos) {
-            inFFlagOffsets = false;
-            passedFFlagOffsets = true;
-            continue;
-        }
-        if (inFFlagOffsets)
-            continue;
-
-        auto eqPos = line.find('=');
-        if (eqPos == std::string::npos) continue;
-
-        auto nameStart = line.find("uintptr_t ");
-        if (nameStart == std::string::npos) continue;
-        nameStart += 10;
-
-        while (nameStart < eqPos && line[nameStart] == ' ') nameStart++;
-        auto nameEnd = eqPos;
-        while (nameEnd > nameStart && line[nameEnd - 1] == ' ') nameEnd--;
-
-        std::string flagName = line.substr(nameStart, nameEnd - nameStart);
-        if (flagName.empty()) continue;
-
-        auto hexPos = line.find("0x", eqPos);
-        if (hexPos == std::string::npos) hexPos = line.find("0X", eqPos);
-        if (hexPos == std::string::npos) continue;
 
         uintptr_t val = 0;
-        try {
-            val = static_cast<uintptr_t>(std::stoull(line.substr(hexPos), nullptr, 16));
-        } catch (...) {
-            continue;
+        while (p < fflagsBody.size() && std::isdigit((unsigned char)fflagsBody[p])) {
+            val = val * 10 + (fflagsBody[p] - '0');
+            ++p;
         }
 
-        if (passedFFlagOffsets || (!inFFlagOffsets && flagName != "FFlagList" && flagName != "ValueGetSet" && flagName != "FlagToValue")) {
-            outFlags[flagName] = val;
-        }
+        if (!name.empty())
+            outFlags[name] = val;
     }
 
     return !outFlags.empty();
@@ -401,7 +462,16 @@ void FFlagManager::ApplyParsedFlags(std::unordered_map<std::string, uintptr_t>& 
 }
 
 bool FFlagManager::LoadCachedOffsets() {
-    std::string cachePath = GetAppDataDir() + "\\fflag_cache.hpp";
+    namespace fs = std::filesystem;
+
+    // Remove legacy .hpp cache if it exists (old format)
+    std::string legacyPath = GetAppDataDir() + "\\fflag_cache.hpp";
+    if (fs::exists(legacyPath)) {
+        fs::remove(legacyPath);
+        Log("[CACHE] Removed legacy .hpp cache - will re-fetch");
+    }
+
+    std::string cachePath = GetAppDataDir() + "\\fflag_cache.json";
     std::ifstream file(cachePath);
     if (!file.is_open())
         return false;
@@ -414,16 +484,17 @@ bool FFlagManager::LoadCachedOffsets() {
 
     std::unordered_map<std::string, uintptr_t> flags;
     std::string version;
-    if (!ParseFlagsHpp(body, flags, version)) {
+    if (!ParseFlagsJson(body, flags, version)) {
         Log("[CACHE] Cache file found but failed to parse - will re-fetch");
+        file.close();
+        fs::remove(cachePath);
         return false;
     }
 
-    // If cache has no version tag it is from an old format — discard and re-fetch
     if (version.empty()) {
-        Log("[CACHE] Cache has no version info (old format) - discarding, will re-fetch");
+        Log("[CACHE] Cache has no version info - discarding, will re-fetch");
         file.close();
-        std::filesystem::remove(cachePath);
+        fs::remove(cachePath);
         return false;
     }
 
@@ -435,24 +506,24 @@ bool FFlagManager::LoadCachedOffsets() {
 }
 
 bool FFlagManager::FetchAndUpdateOffsets() {
-    Log("[UPDATE] Fetching latest FFlag offsets...");
+    Log("[UPDATE] Fetching latest FFlag offsets from imtheo.lol...");
     std::string body = WinHttpGet(
-        L"offsets.ntgetwritewatch.workers.dev",
-        L"/FFlags.hpp");
+        L"imtheo.lol",
+        L"/Offsets/FFlags.json");
 
     if (body.empty()) {
-        Log("[UPDATE] Failed to fetch FFlags.hpp");
+        Log("[UPDATE] Failed to fetch FFlags.json");
         return false;
     }
 
     std::unordered_map<std::string, uintptr_t> newFlags;
     std::string newVersion;
-    if (!ParseFlagsHpp(body, newFlags, newVersion)) {
+    if (!ParseFlagsJson(body, newFlags, newVersion)) {
         Log("[UPDATE] Parsed 0 flags - update failed");
         return false;
     }
 
-    std::string cachePath = GetAppDataDir() + "\\fflag_cache.hpp";
+    std::string cachePath = GetAppDataDir() + "\\fflag_cache.json";
     std::ofstream cache(cachePath);
     if (cache.is_open()) {
         cache << body;

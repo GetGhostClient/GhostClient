@@ -804,7 +804,7 @@ void GhostGUI::RenderSettingsTab() {
             m_statusMsg = "Failed to check version";
         }
     }
-    ImGui::TextDisabled("  Downloads latest offsets from robloxoffsets.com");
+    ImGui::TextDisabled("  Downloads latest offsets from imtheo.lol/Offsets");
 
     ImGui::Spacing();
     ImGui::Separator();
