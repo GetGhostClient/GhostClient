@@ -290,11 +290,9 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         return 0;
     case WM_NCHITTEST: {
         LRESULT hit = DefWindowProcW(hWnd, msg, wParam, lParam);
-        // Allow resize via edges/corners
+        // Let DWM handle all resize hit zones (edges/corners) via WS_THICKFRAME
         if (hit == HTCLIENT && g_draggingHeader)
             return HTCAPTION;
-        // Promote border hits so resize still works
-        if (hit == HTBORDER) return HTSIZEBOX;
         return hit;
     }
     case WM_SYSCOMMAND:
