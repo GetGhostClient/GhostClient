@@ -331,11 +331,10 @@ void GhostGUI::Render() {
     ImVec2 titleMin = ImGui::GetWindowPos();
     ImVec2 titleMax = ImVec2(titleMin.x + winW, titleMin.y + TITLE_H);
 
-    // Drag region detection (exclude right 80px where buttons live)
     ImVec2 mp = ImGui::GetIO().MousePos;
-    bool overTitle = mp.x >= titleMin.x && mp.x <= titleMax.x - 80.0f
-                  && mp.y >= titleMin.y && mp.y <= titleMax.y;
-    g_draggingHeader = overTitle && !ImGui::GetIO().WantCaptureMouse;
+    // Drag from anywhere that ImGui isn't actively using (inputs, buttons, scrollbars)
+    // WantCaptureMouse becomes true when hovering/clicking widgets — that blocks drag
+    g_draggingHeader = !ImGui::GetIO().WantCaptureMouse;
 
     // Draw titlebar background
     ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -344,14 +343,7 @@ void GhostGUI::Render() {
     dl->AddLine(ImVec2(titleMin.x, titleMax.y), titleMax,
         IM_COL32(50, 50, 50, 255));
 
-    // Logo (if loaded)
     float curX = titleMin.x + 12.0f;
-    float iconY = titleMin.y + (TITLE_H - 24.0f) * 0.5f;
-    if (m_logoSRV) {
-        dl->AddImage((ImTextureID)(uintptr_t)m_logoSRV,
-            ImVec2(curX, iconY), ImVec2(curX + 24.0f, iconY + 24.0f));
-        curX += 32.0f;
-    }
 
     // Title text
     const char* title = "GhostClient";

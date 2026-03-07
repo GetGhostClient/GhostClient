@@ -7,7 +7,6 @@
 #include <deque>
 #include <chrono>
 #include <atomic>
-#include <d3d11.h>
 
 class GhostGUI {
 public:
@@ -17,9 +16,6 @@ public:
     void AddLog(const std::string& msg);
 
     static void ApplyTheme();
-    void SetLogoTexture(ID3D11ShaderResourceView* srv, int w, int h) {
-        m_logoSRV = srv; m_logoW = w; m_logoH = h;
-    }
 
 private:
     void RenderMenuBar();
@@ -106,10 +102,6 @@ private:
     std::atomic<bool> m_fetchOffsetsSuccess{ false };
     HANDLE m_fetchThread = nullptr;
     void StartAutoFetchOffsets();
-
-    // Logo texture (optional, loaded from assets/logo.png)
-    ID3D11ShaderResourceView* m_logoSRV = nullptr;
-    int m_logoW = 0, m_logoH = 0;
 
     // All data stored in %LOCALAPPDATA%\GhostClient
     std::string m_dataDir;
