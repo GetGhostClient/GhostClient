@@ -305,7 +305,7 @@ void GhostGUI::Render() {
         }
     }
 
-    extern RECT g_btnZoneScreen;
+    // drag handled via InvisibleButton below
 
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -359,19 +359,20 @@ void GhostGUI::Render() {
         dl->AddText(ImVec2(px, py + 3.0f), IM_COL32(255, 255, 255, 230), pillTxt);
     }
 
-    // Window control buttons: _ [] X  (each 40px wide)
+    // Window control buttons: _ [] x  (each 40px wide, right-aligned)
     const float BTN_W = 40.0f;
     float btnX = winW - BTN_W * 3.0f;
 
-    // Tell WndProc exactly where the buttons are (screen coords) so it can exclude them from drag
-    {
-        ImVec2 btnScreenMin = ImVec2(titleMin.x + btnX, titleMin.y);
-        ImVec2 btnScreenMax = ImVec2(titleMin.x + winW, titleMin.y + TITLE_H);
-        g_btnZoneScreen = { (LONG)btnScreenMin.x, (LONG)btnScreenMin.y,
-                            (LONG)btnScreenMax.x, (LONG)btnScreenMax.y };
+    // Drag region: invisible button covering everything left of the buttons
+    // On left-click-drag, trigger native window move via WM_NCLBUTTONDOWN HTCAPTION
+    ImGui::SetCursorPos(ImVec2(0, 0));
+    ImGui::InvisibleButton("##drag", ImVec2(btnX, TITLE_H));
+    if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0, 2.0f)) {
+        ReleaseCapture();
+        SendMessageW(m_hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
     }
 
-    // Render buttons sequentially from btnX
+    // Button renderer — uses SameLine to chain horizontally
     auto WinBtn = [&](const char* id, const char* lbl, ImU32 hoverCol) -> bool {
         ImVec2 bPos = ImGui::GetCursorScreenPos();
         bool hov = mp.x >= bPos.x && mp.x < bPos.x + BTN_W
@@ -389,11 +390,11 @@ void GhostGUI::Render() {
     bool isMaximized = IsZoomed(m_hwnd);
     ImGui::SetCursorPos(ImVec2(btnX, 0));
 
-    if (WinBtn("##min",   "_",                         IM_COL32(55, 55, 55, 220)))
+    if (WinBtn("##min",   "_",                        IM_COL32(55, 55, 55, 220)))
         ShowWindow(m_hwnd, SW_MINIMIZE);
-    if (WinBtn("##max",   isMaximized ? "[]" : "[ ]",  IM_COL32(55, 55, 55, 220)))
+    if (WinBtn("##max",   isMaximized ? "[]" : "[ ]", IM_COL32(55, 55, 55, 220)))
         ShowWindow(m_hwnd, isMaximized ? SW_RESTORE : SW_MAXIMIZE);
-    if (WinBtn("##close", "x",                         IM_COL32(190, 40, 40, 230)))
+    if (WinBtn("##close", "x",                        IM_COL32(190, 40, 40, 230)))
         PostQuitMessage(0);
 
     // ── Content area ─────────────────────────────────────────────────

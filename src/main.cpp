@@ -33,9 +33,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = L"GhostClientClass";
-    HICON hAppIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_APPICON));
+    HICON hAppIcon = (HICON)LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_APPICON),
+        IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
     wc.hIcon   = hAppIcon;
-    wc.hIconSm = hAppIcon;
+    wc.hIconSm = (HICON)LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_APPICON),
+        IMAGE_ICON, 16, 16, LR_SHARED);
     RegisterClassExW(&wc);
 
     HWND hwnd = CreateWindowExW(
@@ -54,9 +56,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
         return 1;
     }
 
-    // Explicitly set icon on the window handle so alt-tab thumbnail shows it
-    SendMessageW(hwnd, WM_SETICON, ICON_BIG,   (LPARAM)hAppIcon);
-    SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hAppIcon);
+    // Force icon onto the window so alt-tab shows it
+    HICON hBig   = (HICON)LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_APPICON), IMAGE_ICON, 32, 32, LR_SHARED);
+    HICON hSmall = (HICON)LoadImageW(hInstance, MAKEINTRESOURCEW(IDI_APPICON), IMAGE_ICON, 16, 16, LR_SHARED);
+    SendMessageW(hwnd, WM_SETICON, ICON_BIG,   (LPARAM)hBig);
+    SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hSmall);
 
     ShowWindow(hwnd, SW_SHOWDEFAULT);
     UpdateWindow(hwnd);
@@ -187,40 +191,27 @@ static void CleanupRenderTarget() {
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-// Set by GhostGUI each frame: screen-space rect of the button zone (minimize/max/close)
-// so WM_NCHITTEST can exclude it from HTCAPTION.
-RECT g_btnZoneScreen = {};  // {left,top,right,bottom} in screen coords
-
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    // Handle these BEFORE ImGui so our custom hit-testing takes precedence
-    switch (msg) {
-    case WM_NCCALCSIZE:
-        if (wParam) return 0;  // zero non-client area → no white bar
-        break;
-    case WM_NCHITTEST: {
+    // WM_NCCALCSIZE before ImGui — kills the white non-client bar
+    if (msg == WM_NCCALCSIZE && wParam) return 0;
+
+    // Resize hit-testing before ImGui so edges/corners still resize
+    if (msg == WM_NCHITTEST) {
         RECT rc; GetWindowRect(hWnd, &rc);
         int x = GET_X_LPARAM(lParam), y = GET_Y_LPARAM(lParam);
         const int B = 6;
-        bool L = x < rc.left   + B, R = x >= rc.right  - B;
-        bool T = y < rc.top    + B, Bo = y >= rc.bottom - B;
-        if (L && T)   return HTTOPLEFT;
-        if (R && T)   return HTTOPRIGHT;
-        if (L && Bo)  return HTBOTTOMLEFT;
-        if (R && Bo)  return HTBOTTOMRIGHT;
-        if (L)        return HTLEFT;
-        if (R)        return HTRIGHT;
-        if (T)        return HTTOP;
-        if (Bo)       return HTBOTTOM;
-        // Button zone → HTCLIENT so ImGui receives mouse events for the buttons
-        bool inBtnZone = (x >= g_btnZoneScreen.left && x < g_btnZoneScreen.right
-                       && y >= g_btnZoneScreen.top  && y < g_btnZoneScreen.bottom);
-        if (inBtnZone) return HTCLIENT;
-        // Title bar row → draggable
-        const int TITLE_H = 40;
-        if (y < rc.top + TITLE_H) return HTCAPTION;
+        bool L = x < rc.left + B,  R = x >= rc.right  - B;
+        bool T = y < rc.top  + B,  Bo = y >= rc.bottom - B;
+        if (L && T)  return HTTOPLEFT;
+        if (R && T)  return HTTOPRIGHT;
+        if (L && Bo) return HTBOTTOMLEFT;
+        if (R && Bo) return HTBOTTOMRIGHT;
+        if (L)       return HTLEFT;
+        if (R)       return HTRIGHT;
+        if (T)       return HTTOP;
+        if (Bo)      return HTBOTTOM;
+        // Everything else → HTCLIENT so ImGui handles all mouse events
         return HTCLIENT;
-    }
-    default: break;
     }
 
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
