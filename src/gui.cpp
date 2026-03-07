@@ -368,6 +368,13 @@ void GhostGUI::Render() {
     ImGui::SetCursorPos(ImVec2(0, 0));
     ImGui::InvisibleButton("##drag", ImVec2(btnX, TITLE_H));
     if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0, 2.0f)) {
+        // Clear ImGui mouse state before handing off to native move loop.
+        // Without this, ImGui never sees WM_LBUTTONUP (Windows swallows it
+        // during the native drag), so it stays "stuck" thinking the button is
+        // held down and blocks all clicks after the drag ends.
+        ImGui::GetIO().ClearInputKeys();
+        ImGui::GetIO().MouseDown[0] = false;
+        ImGui::GetIO().MouseDownDuration[0] = -1.0f;
         ReleaseCapture();
         SendMessageW(m_hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
     }
