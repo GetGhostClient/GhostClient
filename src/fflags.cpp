@@ -14,33 +14,14 @@
 FFlagManager::FFlagManager(ProcessManager& proc)
     : m_proc(proc)
 {
-    RefreshAllNames();
+    if (!LoadCachedOffsets())
+        RefreshAllNames();
 }
 
 void FFlagManager::RefreshAllNames() {
     m_entries.clear();
     m_nameIndex.clear();
-
-    const auto& flags = Offsets::GetFFlags();
-    m_entries.reserve(flags.size());
-
-    for (const auto& [name, offset] : flags) {
-        FFlagEntry entry;
-        entry.name = name;
-        entry.offset = offset;
-        entry.currentValue = "";
-        entry.readSuccess = false;
-        m_entries.push_back(std::move(entry));
-    }
-
-    std::sort(m_entries.begin(), m_entries.end(),
-        [](const FFlagEntry& a, const FFlagEntry& b) {
-            return a.name < b.name;
-        });
-
-    for (size_t i = 0; i < m_entries.size(); ++i) {
-        m_nameIndex[m_entries[i].name] = i;
-    }
+    Log("[OFFSETS] No cached offsets found. Use Settings > Update Offsets to download them.");
 }
 
 bool FFlagManager::IsFlagInitialized(const std::string& name) {
@@ -250,13 +231,18 @@ void FFlagManager::CheckVersion() {
     std::string parentDir = p.parent_path().filename().string();
 
     // Folder name may have a prefix like "WEAO-LIVE-WindowsPlayer-version-abc123"
-    if (parentDir.find(Offsets::ClientVersion) != std::string::npos) {
+    std::string expectedVer = GetExpectedVersion();
+    if (expectedVer == "unknown" || expectedVer.empty()) {
+        m_versionMatch = false;
+        m_versionMsg = "No offsets loaded. Use Settings > Update Offsets to download them.";
+        Log("[VERSION] No offsets loaded");
+    } else if (parentDir.find(expectedVer) != std::string::npos) {
         m_versionMatch = true;
         Log("[VERSION] Match: " + parentDir);
     } else {
         m_versionMatch = false;
-        m_versionMsg = "Roblox version mismatch! Running: " + parentDir + ", Offsets built for: " + Offsets::ClientVersion;
-        Log("[VERSION] MISMATCH - running: " + parentDir + " expected: " + Offsets::ClientVersion);
+        m_versionMsg = "Roblox version mismatch! Running: " + parentDir + ", Offsets for: " + expectedVer;
+        Log("[VERSION] MISMATCH - running: " + parentDir + " expected: " + expectedVer);
         Log("[VERSION] FFlag offsets may be incorrect. Use Settings > Update Offsets to fetch latest.");
     }
 }
@@ -317,38 +303,25 @@ bool FFlagManager::FetchLatestVersion(std::string& outVersion) {
     return true;
 }
 
-bool FFlagManager::FetchAndUpdateOffsets() {
-    Log("[UPDATE] Fetching latest FFlag offsets...");
-    std::string body = WinHttpGet(
-        L"offsets.ntgetwritewatch.workers.dev",
-        L"/FFlags.hpp");
-
-    if (body.empty()) {
-        Log("[UPDATE] Failed to fetch FFlags.hpp");
-        return false;
-    }
-
-    // Parse the C++ header: lines like "uintptr_t FlagName = 0xABCDEF;"
-    // The file has two namespaces: FFlagOffsets (metadata) and FFlags (the actual flags).
-    // We need to skip the FFlagOffsets block and only parse FFlags entries.
-    std::unordered_map<std::string, uintptr_t> newFlags;
-    std::string newVersion;
-
+// Parses a FFlags.hpp body into a flag map and version string.
+static bool ParseFlagsHpp(const std::string& body,
+    std::unordered_map<std::string, uintptr_t>& outFlags,
+    std::string& outVersion)
+{
     std::istringstream stream(body);
     std::string line;
     bool inFFlagOffsets = false;
     bool passedFFlagOffsets = false;
 
     while (std::getline(stream, line)) {
-        if (newVersion.empty()) {
+        if (outVersion.empty()) {
             auto vpos = line.find("version-");
             if (vpos != std::string::npos) {
                 auto end = line.find_first_of(" \t\r\n\"'", vpos);
-                newVersion = line.substr(vpos, end == std::string::npos ? std::string::npos : end - vpos);
+                outVersion = line.substr(vpos, end == std::string::npos ? std::string::npos : end - vpos);
             }
         }
 
-        // Track which namespace we're in
         if (line.find("namespace FFlagOffsets") != std::string::npos) {
             inFFlagOffsets = true;
             continue;
@@ -386,35 +359,23 @@ bool FFlagManager::FetchAndUpdateOffsets() {
             continue;
         }
 
-        // Only add entries that look like flag offsets (skip FFlagList, ValueGetSet, etc.)
         if (passedFFlagOffsets || (!inFFlagOffsets && flagName != "FFlagList" && flagName != "ValueGetSet" && flagName != "FlagToValue")) {
-            newFlags[flagName] = val;
+            outFlags[flagName] = val;
         }
     }
 
-    if (newFlags.empty()) {
-        Log("[UPDATE] Parsed 0 flags - update failed");
-        return false;
-    }
+    return !outFlags.empty();
+}
 
-    namespace fs = std::filesystem;
-    {
-        std::string cacheDir = GetAppDataDir();
-        std::string cachePath = cacheDir + "\\fflag_cache.hpp";
-        std::ofstream cache(cachePath);
-        if (cache.is_open()) {
-            cache << body;
-            Log("[UPDATE] Saved offset cache to " + cachePath);
-        }
-    }
-
-    Log("[UPDATE] Parsed " + std::to_string(newFlags.size()) + " flags (version: " + newVersion + ")");
-
+// Applies a parsed flag map into m_entries / m_nameIndex and updates m_dynamicVersion.
+void FFlagManager::ApplyParsedFlags(std::unordered_map<std::string, uintptr_t>& flags,
+    const std::string& version)
+{
     m_entries.clear();
     m_nameIndex.clear();
-    m_entries.reserve(newFlags.size());
+    m_entries.reserve(flags.size());
 
-    for (const auto& [flagName, offset] : newFlags) {
+    for (const auto& [flagName, offset] : flags) {
         FFlagEntry entry;
         entry.name = flagName;
         entry.offset = offset;
@@ -428,9 +389,67 @@ bool FFlagManager::FetchAndUpdateOffsets() {
             return a.name < b.name;
         });
 
-    for (size_t i = 0; i < m_entries.size(); ++i) {
+    for (size_t i = 0; i < m_entries.size(); ++i)
         m_nameIndex[m_entries[i].name] = i;
+
+    if (!version.empty())
+        m_dynamicVersion = version;
+}
+
+bool FFlagManager::LoadCachedOffsets() {
+    std::string cachePath = GetAppDataDir() + "\\fflag_cache.hpp";
+    std::ifstream file(cachePath);
+    if (!file.is_open())
+        return false;
+
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    std::string body = ss.str();
+    if (body.empty())
+        return false;
+
+    std::unordered_map<std::string, uintptr_t> flags;
+    std::string version;
+    if (!ParseFlagsHpp(body, flags, version)) {
+        Log("[CACHE] Cache file found but failed to parse - using built-in offsets");
+        return false;
     }
+
+    ApplyParsedFlags(flags, version);
+    m_versionMatch = true;
+    m_versionMsg.clear();
+    Log("[CACHE] Loaded " + std::to_string(m_entries.size()) + " flags from cache (version: " + m_dynamicVersion + ")");
+    return true;
+}
+
+bool FFlagManager::FetchAndUpdateOffsets() {
+    Log("[UPDATE] Fetching latest FFlag offsets...");
+    std::string body = WinHttpGet(
+        L"offsets.ntgetwritewatch.workers.dev",
+        L"/FFlags.hpp");
+
+    if (body.empty()) {
+        Log("[UPDATE] Failed to fetch FFlags.hpp");
+        return false;
+    }
+
+    std::unordered_map<std::string, uintptr_t> newFlags;
+    std::string newVersion;
+    if (!ParseFlagsHpp(body, newFlags, newVersion)) {
+        Log("[UPDATE] Parsed 0 flags - update failed");
+        return false;
+    }
+
+    std::string cachePath = GetAppDataDir() + "\\fflag_cache.hpp";
+    std::ofstream cache(cachePath);
+    if (cache.is_open()) {
+        cache << body;
+        Log("[UPDATE] Saved offset cache to " + cachePath);
+    }
+
+    Log("[UPDATE] Parsed " + std::to_string(newFlags.size()) + " flags (version: " + newVersion + ")");
+
+    ApplyParsedFlags(newFlags, newVersion);
 
     m_versionMatch = true;
     m_versionMsg.clear();

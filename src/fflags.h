@@ -1,6 +1,5 @@
 #pragma once
 #include "process.h"
-#include "offsets.h"
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -34,16 +33,20 @@ public:
 
     size_t GetTotalCount() const { return m_entries.size(); }
     bool IsVersionMatch() const { return m_versionMatch; }
-    std::string GetExpectedVersion() const { return Offsets::ClientVersion; }
+    std::string GetExpectedVersion() const {
+        return m_dynamicVersion.empty() ? "unknown" : m_dynamicVersion;
+    }
     const std::string& GetVersionMismatchMsg() const { return m_versionMsg; }
 
     void CheckVersion();
 
     bool FetchLatestVersion(std::string& outVersion);
     bool FetchAndUpdateOffsets();
+    bool LoadCachedOffsets();
 
 private:
     void Log(const std::string& msg) const { if (m_log) m_log(msg); }
+    void ApplyParsedFlags(std::unordered_map<std::string, uintptr_t>& flags, const std::string& version);
 
     ProcessManager& m_proc;
     LogCallback m_log;
@@ -51,4 +54,5 @@ private:
     std::unordered_map<std::string, size_t> m_nameIndex;
     bool m_versionMatch = false;
     std::string m_versionMsg;
+    std::string m_dynamicVersion;
 };
