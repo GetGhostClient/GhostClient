@@ -9,14 +9,23 @@ Offsets are fetched automatically from the API — no hardcoded values, always u
 - Windows 10/11
 - Visual Studio 2019+ with C++ Desktop Development workload
 - CMake 3.20+
+- Git (for cloning with submodules)
 
 ## Build
 
 ```bash
+git clone --recurse-submodules https://github.com/GetGhostClient/GhostClient.git
+cd GhostClient
 mkdir build
 cd build
 cmake .. -G "Visual Studio 17 2022" -A x64
 cmake --build . --config Release
+```
+
+If you already cloned without `--recurse-submodules`, run:
+
+```bash
+git submodule update --init
 ```
 
 The compiled `ghostclient.exe` will be in `build/Release/`.

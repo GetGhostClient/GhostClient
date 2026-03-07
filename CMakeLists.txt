@@ -8,7 +8,7 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
     message(FATAL_ERROR "GhostClient must be built as x64. Roblox is a 64-bit process and pointer chain reads require 8-byte pointers. Re-run CMake with -A x64.")
 endif()
 
-set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/deps/imgui-1.91.8)
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/deps/imgui)
 
 add_library(imgui_lib STATIC
     ${IMGUI_DIR}/imgui.cpp
