@@ -6,7 +6,6 @@
 #include <vector>
 #include <deque>
 #include <chrono>
-#include <thread>
 #include <atomic>
 
 class GhostGUI {
@@ -92,7 +91,7 @@ private:
     std::atomic<bool> m_fetchingOffsets{ false };
     std::atomic<bool> m_fetchOffsetsDone{ false };
     std::atomic<bool> m_fetchOffsetsSuccess{ false };
-    std::thread m_fetchThread;
+    HANDLE m_fetchThread = nullptr;
     void StartAutoFetchOffsets();
 
     // All data stored in %LOCALAPPDATA%\GhostClient

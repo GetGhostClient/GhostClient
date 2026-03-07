@@ -5,7 +5,6 @@
 #include <fstream>
 #include <sstream>
 #include <cstdio>
-#include <process.h>
 #include <Windows.h>
 #include <ShlObj.h>
 #include <dwmapi.h>
@@ -64,6 +63,23 @@ GhostGUI::GhostGUI(ProcessManager& proc, FFlagManager& flags)
         AddLog("Auto-attach enabled - waiting for RobloxPlayerBeta.exe...");
 }
 
+struct FetchThreadParam {
+    FFlagManager* flags;
+    std::atomic<bool>* success;
+    std::atomic<bool>* done;
+    std::atomic<bool>* running;
+};
+
+static DWORD WINAPI FetchOffsetsThread(LPVOID param) {
+    auto* p = reinterpret_cast<FetchThreadParam*>(param);
+    bool ok = p->flags->FetchAndUpdateOffsets();
+    p->success->store(ok);
+    p->done->store(true);
+    p->running->store(false);
+    delete p;
+    return 0;
+}
+
 void GhostGUI::StartAutoFetchOffsets() {
     if (m_fetchingOffsets.load()) return;
     m_fetchingOffsets = true;
@@ -71,15 +87,18 @@ void GhostGUI::StartAutoFetchOffsets() {
     m_fetchOffsetsSuccess = false;
     m_statusMsg = "Downloading offsets...";
 
-    if (m_fetchThread.joinable())
-        m_fetchThread.detach();
+    if (m_fetchThread) {
+        CloseHandle(m_fetchThread);
+        m_fetchThread = nullptr;
+    }
 
-    m_fetchThread = std::thread([this]() {
-        bool ok = m_flags.FetchAndUpdateOffsets();
-        m_fetchOffsetsSuccess = ok;
-        m_fetchOffsetsDone = true;
-        m_fetchingOffsets = false;
-    });
+    auto* p = new FetchThreadParam{
+        &m_flags,
+        &m_fetchOffsetsSuccess,
+        &m_fetchOffsetsDone,
+        &m_fetchingOffsets
+    };
+    m_fetchThread = CreateThread(nullptr, 0, FetchOffsetsThread, p, 0, nullptr);
 }
 
 void GhostGUI::AddLog(const std::string& msg) {
