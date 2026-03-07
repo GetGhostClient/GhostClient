@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdio>
+#include <process.h>
 #include <Windows.h>
 #include <ShlObj.h>
 #include <dwmapi.h>
