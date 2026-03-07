@@ -215,12 +215,13 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (R)        return HTRIGHT;
         if (T)        return HTTOP;
         if (Bo)       return HTBOTTOM;
-        // Title bar drag zone: top 40px, excluding the button zone on the right
+        // Button zone always goes to client so ImGui can handle clicks
+        bool inBtnZone = (x >= g_btnZoneScreen.left && x < g_btnZoneScreen.right
+                       && y >= g_btnZoneScreen.top  && y < g_btnZoneScreen.bottom);
+        if (inBtnZone) return HTCLIENT;
+        // Rest of title bar row (top 40px) is draggable
         const int TITLE_H = 40;
-        bool inTitleRow  = (y < rc.top + TITLE_H);
-        bool inBtnZone   = (x >= g_btnZoneScreen.left && x < g_btnZoneScreen.right
-                         && y >= g_btnZoneScreen.top  && y < g_btnZoneScreen.bottom);
-        if (inTitleRow && !inBtnZone) return HTCAPTION;
+        if (y < rc.top + TITLE_H) return HTCAPTION;
         return HTCLIENT;
     }
     case WM_SYSCOMMAND:

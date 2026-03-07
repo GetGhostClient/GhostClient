@@ -315,9 +315,13 @@ static bool ParseFlagsHpp(const std::string& body,
 
     while (std::getline(stream, line)) {
         if (outVersion.empty()) {
+            // Handles both:
+            //   /* Roblox Version  : version-xxxxx  (RbxDumperV2 header style)
+            //   any line containing version-xxxxx
             auto vpos = line.find("version-");
             if (vpos != std::string::npos) {
-                auto end = line.find_first_of(" \t\r\n\"'", vpos);
+                // find end of the token — stop at whitespace or comment chars
+                auto end = line.find_first_of(" \t\r\n\"'/*", vpos + 8);
                 outVersion = line.substr(vpos, end == std::string::npos ? std::string::npos : end - vpos);
             }
         }
@@ -411,7 +415,15 @@ bool FFlagManager::LoadCachedOffsets() {
     std::unordered_map<std::string, uintptr_t> flags;
     std::string version;
     if (!ParseFlagsHpp(body, flags, version)) {
-        Log("[CACHE] Cache file found but failed to parse - using built-in offsets");
+        Log("[CACHE] Cache file found but failed to parse - will re-fetch");
+        return false;
+    }
+
+    // If cache has no version tag it is from an old format — discard and re-fetch
+    if (version.empty()) {
+        Log("[CACHE] Cache has no version info (old format) - discarding, will re-fetch");
+        file.close();
+        std::filesystem::remove(cachePath);
         return false;
     }
 
