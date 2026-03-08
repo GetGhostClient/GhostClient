@@ -8,7 +8,8 @@
 
 param(
     [Parameter(Mandatory)][string]$Version,
-    [string]$EnvFile = "$PSScriptRoot\..\discord.env"
+    [string]$EnvFile = "$PSScriptRoot\..\discord.env",
+    [switch]$Confirm  # when set, skip Discord prompt and post automatically
 )
 
 Set-StrictMode -Version Latest
@@ -133,7 +134,7 @@ Write-Host "Fields  :"
 Write-Host $bulletsPlain
 Write-Host "===============================================" -ForegroundColor Yellow
 
-if (-not (Confirm-Step "Post this to Discord? [y/N]")) {
+if (-not $Confirm -and -not (Confirm-Step "Post this to Discord? [y/N]")) {
     Write-Host "Discord post skipped." -ForegroundColor DarkGray
     exit 0
 }
