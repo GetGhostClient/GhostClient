@@ -27,15 +27,25 @@ jobs:
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          name: GhostClient ${{ github.ref_name }}
+          name: Ghost Client ${{ github.ref_name }}
           body: |
-            ## GhostClient ${{ github.ref_name }}
+            <p align="center">
+              <img src="https://raw.githubusercontent.com/GetGhostClient/GhostClient/master/assets/logo.png" width="120" alt="Ghost Client logo"/>
+            </p>
+
+            ## Ghost Client ${{ github.ref_name }}
+
+            > Runtime FFlag editor for Roblox — no injection, no detection.
 
             ### Download
-            Run `ghostclient.exe` as Administrator. Offsets are fetched automatically on first launch.
+            Grab **ghostclient.exe** below and run it as Administrator.  
+            Offsets are fetched automatically from [imtheo.lol/Offsets](https://imtheo.lol/Offsets) on launch.
 
-            ### Changelog
-            See [commits](${{ github.server_url }}/${{ github.repository }}/commits/${{ github.ref_name }}) since last release.
+            ### What's new
+            See the full [commit history](${{ github.server_url }}/${{ github.repository }}/compare/${{ github.ref_name }}...HEAD) for details.
+
+            ---
+            *Built on Windows · DirectX 11 · ImGui · Wanted Sans*
           files: build/Release/ghostclient.exe
           draft: false
           prerelease: false

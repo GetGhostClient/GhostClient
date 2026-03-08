@@ -1,10 +1,10 @@
 # Ghost Client — release.ps1
-# Usage: .\scripts\release.ps1 -Version v1.2.1
+# Usage: .\scripts\release.ps1 -Version v1.2.2
 #
 # 1. Tags and pushes the version
-# 2. Waits for CI build
-# 3. Edits release notes on GitHub
-# 4. Previews Discord announcement and asks for approval before posting
+# 2. Waits for CI build to complete
+# 3. Updates GitHub release notes (with logo embed)
+# 4. Shows Discord announcement preview, asks for approval, then posts
 
 param(
     [Parameter(Mandatory)][string]$Version,
@@ -13,6 +13,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$REPO        = "GetGhostClient/GhostClient"
+$LOGO_URL    = "https://raw.githubusercontent.com/$REPO/master/assets/logo.png"
+$RELEASE_URL = "https://github.com/$REPO/releases/tag/$Version"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 function Die($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
@@ -37,69 +41,105 @@ $dirty = git status --porcelain 2>&1
 if ($dirty) { Die "Working tree is dirty. Commit or stash changes first." }
 
 # ── Tag and push ──────────────────────────────────────────────────────────────
-Write-Host "`nTagging $Version..." -ForegroundColor Green
+Write-Host "`nTagging $Version and pushing..." -ForegroundColor Green
 git tag $Version
 git push origin master
 git push origin $Version
 
 # ── Wait for CI ───────────────────────────────────────────────────────────────
 Write-Host "`nWaiting for GitHub Actions build..." -ForegroundColor Green
-Start-Sleep -Seconds 8
-$runId = (gh run list --limit 1 --json databaseId --jq ".[0].databaseId") 2>&1
+Start-Sleep -Seconds 10
+$runId = gh run list --limit 1 --json databaseId --jq ".[0].databaseId"
 Write-Host "Run ID: $runId"
 gh run watch $runId --exit-status
 if ($LASTEXITCODE -ne 0) { Die "CI build failed for run $runId" }
 Write-Host "Build succeeded!" -ForegroundColor Green
 
 # ── Collect changelog ─────────────────────────────────────────────────────────
-# Auto-generate from commits since previous tag
-$prevTag = (git tag --sort=-version:refname | Select-Object -Skip 1 -First 1)
-$commits = git log "$prevTag..$Version" --pretty=format:"- %s" 2>&1
-Write-Host "`nCommits since $prevTag`:`n$commits"
+$prevTag = git tag --sort=-version:refname | Select-Object -Skip 1 -First 1
+$rawCommits = git log "$prevTag..$Version" --pretty=format:"- %s"
+Write-Host "`nCommits since $prevTag`:`n$rawCommits"
 
-# ── Build release notes ───────────────────────────────────────────────────────
-$notes = @"
+# Strip chore/ci/docs commits for the public-facing list
+$publicCommits = $rawCommits -split "`n" |
+    Where-Object { $_ -notmatch '^\s*-\s*(chore|ci|docs|style|refactor):' } |
+    Select-Object -First 10
+
+$bulletsMd   = $publicCommits -join "`n"              # for GitHub (markdown)
+$bulletsPlain = ($publicCommits | ForEach-Object {     # for Discord (no leading -)
+    $_ -replace '^\s*-\s*feat:\s*', '' `
+       -replace '^\s*-\s*fix:\s*', 'Fix: ' `
+       -replace '^\s*-\s*', ''
+}) -join "`n"
+
+# ── Update GitHub release notes ───────────────────────────────────────────────
+$ghNotes = @"
+<p align="center">
+  <img src="$LOGO_URL" width="120" alt="Ghost Client logo"/>
+</p>
+
 ## Ghost Client $Version
 
-### Changes
-$commits
+> Runtime FFlag editor for Roblox — no injection, no detection.
 
-Download: https://github.com/GetGhostClient/GhostClient/releases/tag/$Version
+### What's new
+$bulletsMd
+
+---
+**Download** ghostclient.exe below and run as Administrator.  
+Offsets fetched automatically from [imtheo.lol/Offsets](https://imtheo.lol/Offsets).
+
+*Built on Windows · DirectX 11 · ImGui · Wanted Sans*
 "@
 
-# ── Update GitHub release ─────────────────────────────────────────────────────
-$notes | Out-File -FilePath "$env:TEMP\relnotes.txt" -Encoding utf8
+$ghNotes | Out-File "$env:TEMP\relnotes.txt" -Encoding utf8
 gh release edit $Version --title "Ghost Client $Version" --notes-file "$env:TEMP\relnotes.txt"
-Write-Host "GitHub release updated." -ForegroundColor Green
+Write-Host "GitHub release notes updated." -ForegroundColor Green
 
-# ── Build Discord embed ───────────────────────────────────────────────────────
-$bulletLines = ($commits -split "`n" | Where-Object { $_.Trim() } | Select-Object -First 8) -join "`n"
+# ── Build Discord embed (rich embed with thumbnail) ───────────────────────────
+# Discord webhook supports embeds via JSON
+$embedFields = @()
+if ($bulletsPlain) {
+    $embedFields += @{
+        name   = "What's new"
+        value  = $bulletsPlain
+        inline = $false
+    }
+}
 
-$discordMsg = @"
-**Ghost Client $Version** is out!
+$embed = @{
+    title       = "Ghost Client $Version"
+    description = "Runtime FFlag editor for Roblox."
+    url         = $RELEASE_URL
+    color       = 0x2b2d31   # dark grey matching app theme
+    thumbnail   = @{ url = $LOGO_URL }
+    fields      = $embedFields
+    footer      = @{ text = "Offsets: imtheo.lol/Offsets" }
+}
 
-**What's new:**
-$bulletLines
+$payload = @{
+    username   = "Ghost Client"
+    avatar_url = $LOGO_URL
+    content    = ""
+    embeds     = @($embed)
+}
 
-**Download:** https://github.com/GetGhostClient/GhostClient/releases/tag/$Version
-"@
+# ── Preview ───────────────────────────────────────────────────────────────────
+Write-Host "`n============ DISCORD EMBED PREVIEW ============" -ForegroundColor Yellow
+Write-Host "Title   : Ghost Client $Version"
+Write-Host "URL     : $RELEASE_URL"
+Write-Host "Thumb   : $LOGO_URL"
+Write-Host "Fields  :"
+Write-Host $bulletsPlain
+Write-Host "===============================================" -ForegroundColor Yellow
 
-# ── Preview and confirm ───────────────────────────────────────────────────────
-Write-Host "`n============ DISCORD PREVIEW ============" -ForegroundColor Yellow
-Write-Host $discordMsg
-Write-Host "=========================================" -ForegroundColor Yellow
-
-if (-not (Confirm-Step "Post this to Discord? (y to send, N to skip)")) {
+if (-not (Confirm-Step "Post this to Discord? [y/N]")) {
     Write-Host "Discord post skipped." -ForegroundColor DarkGray
     exit 0
 }
 
-# ── Post to Discord webhook ───────────────────────────────────────────────────
-$payload = @{
-    content  = $discordMsg
-    username = "Ghost Client"
-} | ConvertTo-Json -Compress
-
-$resp = Invoke-RestMethod -Uri $webhookUrl -Method Post `
-    -ContentType "application/json" -Body $payload
+# ── Post ──────────────────────────────────────────────────────────────────────
+$json = $payload | ConvertTo-Json -Depth 6 -Compress
+Invoke-RestMethod -Uri $webhookUrl -Method Post `
+    -ContentType "application/json" -Body $json | Out-Null
 Write-Host "Discord announcement posted!" -ForegroundColor Green
