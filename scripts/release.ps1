@@ -1,19 +1,26 @@
 # Ghost Client — release.ps1
-# Usage: .\scripts\release.ps1 -Version v1.2.2
+# Usage: .\scripts\release.ps1 -Version v1.2.2 [-Confirm] [-DiscordOnly]
 #
 # 1. Tags and pushes the version
 # 2. Waits for CI build to complete
 # 3. Updates GitHub release notes (with logo embed)
-# 4. Shows Discord announcement preview, asks for approval, then posts
+# 4. Posts Discord announcement (embed body from $RELEASE_WHATS_NEW below)
 
 param(
     [Parameter(Mandatory)][string]$Version,
-    [string]$EnvFile = "$PSScriptRoot\..\discord.env",
-    [switch]$Confirm  # when set, skip Discord prompt and post automatically
+    [string]$EnvFile = (Join-Path (Split-Path $PSScriptRoot -Parent) "discord.env"),
+    [switch]$Confirm,      # when set, skip Discord prompt and post automatically
+    [switch]$DiscordOnly   # when set, only post Discord embed (no tag/push/CI/GH)
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# ── EDIT BEFORE EACH RELEASE: Discord + GitHub "What's new" (type it yourself) ──
+$RELEASE_WHATS_NEW = @"
+Replace checkboxes with animated toggle buttons
+"@
+# ─────────────────────────────────────────────────────────────────────────────
 
 $REPO        = "GetGhostClient/GhostClient"
 $LOGO_URL    = "https://raw.githubusercontent.com/$REPO/master/assets/logo.png"
@@ -37,43 +44,29 @@ if (Test-Path $EnvFile) {
 }
 if (-not $webhookUrl) { Die "DISCORD_WEBHOOK not found in $EnvFile" }
 
-# ── Verify clean working tree ─────────────────────────────────────────────────
-$dirty = git status --porcelain 2>&1
-if ($dirty) { Die "Working tree is dirty. Commit or stash changes first." }
+if (-not $DiscordOnly) {
+    # ── Verify clean working tree ─────────────────────────────────────────────
+    $dirty = git status --porcelain 2>&1
+    if ($dirty) { Die "Working tree is dirty. Commit or stash changes first." }
 
-# ── Tag and push ──────────────────────────────────────────────────────────────
-Write-Host "`nTagging $Version and pushing..." -ForegroundColor Green
-git tag $Version
-git push origin master
-git push origin $Version
+    # ── Tag and push ──────────────────────────────────────────────────────────
+    Write-Host "`nTagging $Version and pushing..." -ForegroundColor Green
+    git tag $Version
+    git push origin master
+    git push origin $Version
 
-# ── Wait for CI ───────────────────────────────────────────────────────────────
-Write-Host "`nWaiting for GitHub Actions build..." -ForegroundColor Green
-Start-Sleep -Seconds 10
-$runId = gh run list --limit 1 --json databaseId --jq ".[0].databaseId"
-Write-Host "Run ID: $runId"
-gh run watch $runId --exit-status
-if ($LASTEXITCODE -ne 0) { Die "CI build failed for run $runId" }
-Write-Host "Build succeeded!" -ForegroundColor Green
+    # ── Wait for CI ──────────────────────────────────────────────────────────
+    Write-Host "`nWaiting for GitHub Actions build..." -ForegroundColor Green
+    Start-Sleep -Seconds 10
+    $runId = gh run list --limit 1 --json databaseId --jq ".[0].databaseId"
+    Write-Host "Run ID: $runId"
+    gh run watch $runId --exit-status
+    if ($LASTEXITCODE -ne 0) { Die "CI build failed for run $runId" }
+    Write-Host "Build succeeded!" -ForegroundColor Green
 
-# ── Collect changelog ─────────────────────────────────────────────────────────
-$prevTag = git tag --sort=-version:refname | Select-Object -Skip 1 -First 1
-$rawCommits = git log "$prevTag..$Version" --pretty=format:"- %s"
-Write-Host "`nCommits since $prevTag`:`n$rawCommits"
+    # ── Update GitHub release notes ─────────────────────────────────────────
+$bulletsMd = ($RELEASE_WHATS_NEW.Trim().Replace("`r`n", "`n") -split "`n" | ForEach-Object { $t = $_.Trim(); if ($t) { "- " + $t } } | Where-Object { $_ }) -join "`n"
 
-# Strip chore/ci/docs commits for the public-facing list
-$publicCommits = $rawCommits -split "`n" |
-    Where-Object { $_ -notmatch '^\s*-\s*(chore|ci|docs|style|refactor):' } |
-    Select-Object -First 10
-
-$bulletsMd   = $publicCommits -join "`n"              # for GitHub (markdown)
-$bulletsPlain = ($publicCommits | ForEach-Object {     # for Discord (no leading -)
-    $_ -replace '^\s*-\s*feat:\s*', '' `
-       -replace '^\s*-\s*fix:\s*', 'Fix: ' `
-       -replace '^\s*-\s*', ''
-}) -join "`n"
-
-# ── Update GitHub release notes ───────────────────────────────────────────────
 $ghNotes = @"
 <p align="center">
   <img src="$LOGO_URL" width="120" alt="Ghost Client logo"/>
@@ -93,17 +86,18 @@ Offsets fetched automatically from [imtheo.lol/Offsets](https://imtheo.lol/Offse
 *Built on Windows · DirectX 11 · ImGui · Wanted Sans*
 "@
 
-$ghNotes | Out-File "$env:TEMP\relnotes.txt" -Encoding utf8
-gh release edit $Version --title "Ghost Client $Version" --notes-file "$env:TEMP\relnotes.txt"
-Write-Host "GitHub release notes updated." -ForegroundColor Green
+    $ghNotes | Out-File "$env:TEMP\relnotes.txt" -Encoding utf8
+    gh release edit $Version --title "Ghost Client $Version" --notes-file "$env:TEMP\relnotes.txt"
+    Write-Host "GitHub release notes updated." -ForegroundColor Green
+}
 
 # ── Build Discord embed (rich embed with thumbnail) ───────────────────────────
-# Discord webhook supports embeds via JSON
+$discordBody = $RELEASE_WHATS_NEW.Trim()
 $embedFields = @()
-if ($bulletsPlain) {
+if ($discordBody) {
     $embedFields += @{
         name   = "What's new"
-        value  = $bulletsPlain
+        value  = $discordBody
         inline = $false
     }
 }
@@ -131,10 +125,10 @@ Write-Host "Title   : Ghost Client $Version"
 Write-Host "URL     : $RELEASE_URL"
 Write-Host "Thumb   : $LOGO_URL"
 Write-Host "Fields  :"
-Write-Host $bulletsPlain
+Write-Host $discordBody
 Write-Host "===============================================" -ForegroundColor Yellow
 
-if (-not $Confirm -and -not (Confirm-Step "Post this to Discord? [y/N]")) {
+if ((-not $Confirm -and -not $DiscordOnly) -and -not (Confirm-Step "Post this to Discord? [y/N]")) {
     Write-Host "Discord post skipped." -ForegroundColor DarkGray
     exit 0
 }
