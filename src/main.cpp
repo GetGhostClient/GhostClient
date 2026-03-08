@@ -6,6 +6,7 @@
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
+#include "WantedSans_Regular.h"
 
 #include <d3d11.h>
 #include <tchar.h>
@@ -62,9 +63,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
     SendMessageW(hwnd, WM_SETICON, ICON_BIG,   (LPARAM)hBig);
     SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hSmall);
 
-    ShowWindow(hwnd, SW_SHOWDEFAULT);
-    UpdateWindow(hwnd);
-
+    // Window stays hidden while data loads — shown after GhostGUI is ready
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -73,12 +72,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
 
     GhostGUI::ApplyTheme();
 
+    // Load WantedSans-Regular as the default font at 14px.
+    // FontDataOwnedByAtlas=false: ImGui won't free our static array.
+    // Do NOT call io.Fonts->Build() here — ImGui_ImplDX11 calls it on first NewFrame.
+    ImFontConfig fc;
+    fc.FontDataOwnedByAtlas = false;
+    io.Fonts->AddFontFromMemoryTTF(
+        (void*)WantedSans_Regular_ttf, (int)WantedSans_Regular_ttf_size, 14.0f, &fc);
+
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
     ProcessManager proc;
-    FFlagManager flags(proc);
-    GhostGUI gui(proc, flags);
+    FFlagManager flags(proc);   // loads offsets + fvars cache + value cache synchronously
+    GhostGUI gui(proc, flags);  // starts watcher thread, loads config
+
+    ShowWindow(hwnd, SW_SHOWDEFAULT);
+    UpdateWindow(hwnd);
 
 
     bool running = true;

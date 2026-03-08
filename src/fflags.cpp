@@ -14,8 +14,25 @@
 FFlagManager::FFlagManager(ProcessManager& proc)
     : m_proc(proc)
 {
-    if (!LoadCachedOffsets())
-        RefreshAllNames();
+    if (!LoadCachedOffsets()) {
+        // No cache — do a synchronous fetch before the window opens.
+        // LoadCachedOffsets already calls LoadCachedFVariables + LoadValueCache on success.
+        if (!FetchAndUpdateOffsets()) {
+            RefreshAllNames();
+        } else {
+            // FetchAndUpdateOffsets doesn't stamp types — do it now synchronously.
+            // Try local cache first (fast), fall back to network if not present.
+            namespace fs = std::filesystem;
+            std::string fvarsCachePath = GetAppDataDir() + "\\fvars_cache.txt";
+            if (fs::exists(fvarsCachePath))
+                LoadCachedFVariables();
+            else
+                FetchAndApplyFVariables(); // also saves the cache for next time
+            LoadValueCache();
+        }
+    }
+    // If LoadCachedOffsets succeeded it already called LoadCachedFVariables
+    // + LoadValueCache internally, so nothing more to do here.
 }
 
 void FFlagManager::RefreshAllNames() {
@@ -50,7 +67,7 @@ bool FFlagManager::IsFlagInitialized(const std::string& name) {
 
 bool FFlagManager::ReadFlagValue(FFlagEntry& entry) {
     if (!m_proc.IsAttached()) {
-        entry.readSuccess = false;
+        // Don't clear readSuccess/currentValue — preserve the cached value
         return false;
     }
 
@@ -500,7 +517,171 @@ bool FFlagManager::LoadCachedOffsets() {
     m_versionMatch = true;
     m_versionMsg.clear();
     Log("[CACHE] Loaded " + std::to_string(m_entries.size()) + " flags from cache (version: " + m_dynamicVersion + ")");
+
+    // Stamp types synchronously from local cache — no network, instant
+    LoadCachedFVariables();
+    // Restore last-read values so booleans etc. show before attach
+    LoadValueCache();
+
     return true;
+}
+
+// ── FVariables type stamping ─────────────────────────────────────────────────
+// Parses a FVariables.txt body (lines like "[C++] DFFlagFoo" or "[Lua] FIntBar")
+// and stamps the FlagType on every matching entry in m_entries.
+static FlagType TypeFromPrefix(const std::string& fullName) {
+    struct { const char* prefix; FlagType type; } table[] = {
+        { "DFFlag",  FlagType::Bool  }, { "FFlag",   FlagType::Bool  },
+        { "SFFlag",  FlagType::Bool  }, { "DFlag",   FlagType::Bool  },
+        { "SFlag",   FlagType::Bool  },
+        { "FFloat",  FlagType::Int   }, { "DFDouble", FlagType::Int   },
+        { "DFInt",   FlagType::Int   }, { "FInt",    FlagType::Int   },
+        { "SFInt",   FlagType::Int   }, { "FLog",    FlagType::Int   },
+        { "DFString",FlagType::String}, { "FString", FlagType::String},
+        { "SFString",FlagType::String},
+    };
+    for (auto& e : table) {
+        size_t n = strlen(e.prefix);
+        if (fullName.size() > n && fullName.substr(0, n) == e.prefix)
+            return e.type;
+    }
+    return FlagType::Unknown;
+}
+
+// Strips the type prefix from a full flag name to get the bare name.
+// e.g. "DFFlagFoo" → "Foo", "FIntBar" → "Bar"
+static std::string StripTypePrefix(const std::string& fullName) {
+    static const char* prefixes[] = {
+        "DFDouble","DFString","SFString","DFFlag","SFFlag","DFInt","SFInt",
+        "FFloat","FString","FFlag","DFlag","SFlag","FLog","FInt", nullptr
+    };
+    for (int i = 0; prefixes[i]; ++i) {
+        size_t n = strlen(prefixes[i]);
+        if (fullName.size() > n && fullName.substr(0, n) == prefixes[i])
+            return fullName.substr(n);
+    }
+    return fullName;
+}
+
+// Parses FVariables body into a bare-name → FlagType map and stamps m_entries.
+// Returns number of entries stamped.
+static int ApplyFVariablesBody(const std::string& body,
+    std::vector<FFlagEntry>& entries)
+{
+    std::unordered_map<std::string, FlagType> typeMap;
+    typeMap.reserve(20000);
+
+    std::istringstream stream(body);
+    std::string line;
+    while (std::getline(stream, line)) {
+        auto bracket = line.find(']');
+        if (bracket == std::string::npos) continue;
+        std::string fullName = line.substr(bracket + 1);
+        size_t start = fullName.find_first_not_of(" \t");
+        if (start == std::string::npos) continue;
+        fullName = fullName.substr(start);
+        while (!fullName.empty() && (fullName.back() == ' ' || fullName.back() == '\r' || fullName.back() == '\n'))
+            fullName.pop_back();
+        FlagType ft = TypeFromPrefix(fullName);
+        if (ft == FlagType::Unknown) continue;
+        std::string bare = StripTypePrefix(fullName);
+        if (!bare.empty()) typeMap[bare] = ft;
+    }
+
+    if (typeMap.empty()) return 0;
+
+    int stamped = 0;
+    for (auto& entry : entries) {
+        auto it = typeMap.find(entry.name);
+        if (it != typeMap.end()) { entry.type = it->second; ++stamped; }
+    }
+    return stamped;
+}
+
+bool FFlagManager::LoadCachedFVariables() {
+    std::string cachePath = GetAppDataDir() + "\\fvars_cache.txt";
+    std::ifstream f(cachePath);
+    if (!f.is_open()) return false;
+    std::ostringstream ss; ss << f.rdbuf();
+    std::string body = ss.str();
+    if (body.empty()) return false;
+
+    int stamped = ApplyFVariablesBody(body, m_entries);
+    if (stamped == 0) return false;
+
+    Log("[FVARS] Loaded types from cache: " + std::to_string(stamped) + " entries stamped");
+    return true;
+}
+
+void FFlagManager::FetchAndApplyFVariables() {
+    Log("[FVARS] Fetching FVariables.txt from Roblox-Client-Tracker...");
+
+    std::string body = WinHttpGet(
+        L"raw.githubusercontent.com",
+        L"/MaximumADHD/Roblox-Client-Tracker/refs/heads/roblox/FVariables.txt");
+
+    if (body.empty()) {
+        Log("[FVARS] Failed to fetch FVariables.txt");
+        // Fall back to cache if fetch fails
+        LoadCachedFVariables();
+        return;
+    }
+
+    // Save to cache for next startup
+    std::string cachePath = GetAppDataDir() + "\\fvars_cache.txt";
+    std::ofstream cf(cachePath, std::ios::trunc);
+    if (cf.is_open()) cf << body;
+
+    int stamped = ApplyFVariablesBody(body, m_entries);
+    Log("[FVARS] Stamped types for " + std::to_string(stamped) + " / "
+        + std::to_string(m_entries.size()) + " entries");
+}
+
+// ── Value cache ──────────────────────────────────────────────────────────────
+// Persists last-read flag values so booleans (and other values) are visible
+// even before attaching or after a restart.
+// Format: one entry per line — "name\tvalue\n"
+
+void FFlagManager::SaveValueCache() {
+    std::string cachePath = GetAppDataDir() + "\\value_cache.txt";
+    std::ofstream f(cachePath, std::ios::trunc);
+    if (!f.is_open()) return;
+    for (const auto& e : m_entries) {
+        if (e.readSuccess && !e.currentValue.empty())
+            f << e.name << '\t' << e.currentValue << '\n';
+    }
+}
+
+void FFlagManager::LoadValueCache() {
+    std::string cachePath = GetAppDataDir() + "\\value_cache.txt";
+    std::ifstream f(cachePath);
+    if (!f.is_open()) return;
+
+    std::unordered_map<std::string, std::string> valueMap;
+    std::string line;
+    while (std::getline(f, line)) {
+        auto tab = line.find('\t');
+        if (tab == std::string::npos) continue;
+        std::string name = line.substr(0, tab);
+        std::string val  = line.substr(tab + 1);
+        // Strip trailing CR
+        while (!val.empty() && (val.back() == '\r' || val.back() == '\n'))
+            val.pop_back();
+        if (!name.empty() && !val.empty())
+            valueMap[name] = val;
+    }
+
+    int restored = 0;
+    for (auto& e : m_entries) {
+        auto it = valueMap.find(e.name);
+        if (it != valueMap.end()) {
+            e.currentValue = it->second;
+            e.readSuccess  = true;
+            ++restored;
+        }
+    }
+    if (restored > 0)
+        Log("[CACHE] Restored " + std::to_string(restored) + " cached flag values");
 }
 
 bool FFlagManager::FetchAndUpdateOffsets() {

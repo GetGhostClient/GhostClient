@@ -7,11 +7,14 @@
 
 std::string GetAppDataDir();
 
+enum class FlagType { Bool, Int, Float, String, Unknown };
+
 struct FFlagEntry {
     std::string name;
-    uintptr_t offset;
+    uintptr_t   offset      = 0;
     std::string currentValue;
-    bool readSuccess;
+    bool        readSuccess  = false;
+    FlagType    type         = FlagType::Unknown;
 };
 
 class FFlagManager {
@@ -43,6 +46,15 @@ public:
     bool FetchLatestVersion(std::string& outVersion);
     bool FetchAndUpdateOffsets();
     bool LoadCachedOffsets();
+
+    // Loads cached FVariables types synchronously (fast, no network)
+    bool LoadCachedFVariables();
+    // Fetches FVariables.txt from Roblox-Client-Tracker, stamps types, saves cache
+    void FetchAndApplyFVariables();
+
+    // Persists / restores last-read flag values so they survive restarts
+    void SaveValueCache();
+    void LoadValueCache();
 
 private:
     void Log(const std::string& msg) const { if (m_log) m_log(msg); }

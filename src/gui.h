@@ -18,13 +18,17 @@ public:
     static void ApplyTheme();
 
 private:
-    void RenderMenuBar();
+    void RenderTitleBar();
+    void RenderSidebar();
     void RenderStatusBar();
-    void RenderBrowserTab();
-    void RenderInjectorTab();
-    void RenderPresetsTab();
-    void RenderLogsTab();
-    void RenderSettingsTab();
+    void RenderPageBrowser();
+    void RenderPageInjector();
+    void RenderPagePresets();
+    void RenderPageLogs();
+    void RenderPageSettings();
+
+    enum class Page { Browser, Injector, Presets, Logs, Settings };
+    Page m_activePage = Page::Browser;
 
     void DoAttach();
     void DoAttachByPid();
@@ -43,6 +47,13 @@ private:
     char m_searchBuf[256] = {};
     std::vector<FFlagEntry*> m_filteredFlags;
     bool m_needsRefresh = true;
+    FlagType m_typeFilter = FlagType::Unknown; // Unknown = show all
+    int  m_sortCol = 1;   // 0=type, 1=name, 2=offset, 3=value
+    bool m_sortAsc = true;
+
+    // Copy flash indicator
+    float       m_copyFlashTimer = 0.0f;
+    std::string m_copyFlashLabel; // label of what was copied
 
     // PID attach state
     char m_pidBuf[16] = {};
@@ -67,14 +78,24 @@ private:
     // Auto-attach state
     bool m_autoAttach = true;
     bool m_autoInject = true;
-    float m_autoAttachTimer = 0.0f;
-    static constexpr float AUTO_ATTACH_INTERVAL = 2.0f;
     bool m_wasAttached = false;
+    static constexpr float AUTO_ATTACH_INTERVAL = 2.0f; // kept for inject-retry reuse
+
+    // Watcher thread: detects Roblox spawn at ~100ms latency, no frame-timer polling
+    std::atomic<bool> m_robloxDetected{ false };
+    std::atomic<bool> m_watcherRunning{ false };
+    HANDLE m_watcherThread = nullptr;
+    void StartWatcherThread();
+    void StopWatcherThread();
 
     // Auto-read state
     bool m_autoRead = true;
     float m_autoReadTimer = 0.0f;
     float m_autoReadInterval = 2.0f;
+
+    // Value cache flush state
+    bool  m_valueCacheDirty = false;
+    float m_valueCacheTimer = 0.0f;
 
     // Auto-update offsets on mismatch
     bool m_autoUpdateOffsets = true;
@@ -102,6 +123,10 @@ private:
     std::atomic<bool> m_fetchOffsetsSuccess{ false };
     HANDLE m_fetchThread = nullptr;
     void StartAutoFetchOffsets();
+
+    // Background FVariables type-stamp (fires after offsets are loaded)
+    HANDLE m_fvarsThread = nullptr;
+    void StartFetchFVariables();
 
     // All data stored in %LOCALAPPDATA%\GhostClient
     std::string m_dataDir;
