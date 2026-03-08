@@ -68,3 +68,13 @@ Desktop.ini
 
 # Assets — track source files, ignore nothing (add logo.png to assets/ and commit it)
 
+# Local secrets — never commit
+discord.env
+*.env
+secrets.json
+
+# Downloaded font build artifacts
+assets/WantedSans-Regular.ttf
+assets/WantedSans.zip
+assets/WantedSans_extracted/
+
