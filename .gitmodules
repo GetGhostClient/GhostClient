@@ -1,7 +1,1 @@
-[submodule "deps/imgui"]
-	path = deps/imgui
-	url = https://github.com/ocornut/imgui.git
-	shallow = true
-[submodule "imgui"]
-	path = deps/imgui
-	url = https://github.com/ocornut/imgui.git
+﻿
