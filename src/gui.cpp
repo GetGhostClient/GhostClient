@@ -13,6 +13,60 @@
 
 namespace fs = std::filesystem;
 
+// Toggle button with smooth slide animation. Drop-in for Checkbox; returns true when toggled.
+static bool ToggleButton(const char* label, bool* v) {
+    ImGui::PushID(label);
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float h = ImGui::GetFrameHeight();
+    const float w = h * 2.2f;
+    const ImVec2 toggle_sz(w, h);
+
+    ImGui::InvisibleButton("t", toggle_sz);
+    bool pressed = ImGui::IsItemClicked();
+    if (pressed) *v = !*v;
+
+    // Animate knob position (0 = off, 1 = on)
+    const float target = *v ? 1.0f : 0.0f;
+    ImGuiStorage* storage = ImGui::GetStateStorage();
+    ImGuiID id = ImGui::GetID("t");
+    float* pAnim = storage->GetFloatRef(id, target);
+    const float speed = 10.0f;
+    float dt = ImGui::GetIO().DeltaTime;
+    float step = (speed * dt < 1.0f) ? (speed * dt) : 1.0f;
+    *pAnim += (target - *pAnim) * step;
+    if (*pAnim < 0.001f) *pAnim = 0.0f;
+    if (*pAnim > 0.999f) *pAnim = 1.0f;
+    const float t = *pAnim;
+
+    const ImVec2 track_min = ImGui::GetItemRectMin();
+    const ImVec2 track_max = ImGui::GetItemRectMax();
+    const float rounding = toggle_sz.y * 0.5f;
+    const float pad = 2.0f;
+    const float knob_radius = (toggle_sz.y - pad * 2.0f) * 0.5f;
+    const float knob_min_x = track_min.x + pad + knob_radius;
+    const float knob_max_x = track_max.x - pad - knob_radius;
+    const float knob_x = knob_min_x + (knob_max_x - knob_min_x) * t;
+    const float knob_y = (track_min.y + track_max.y) * 0.5f;
+
+    bool hovered = ImGui::IsItemHovered();
+    ImU32 track_col = ImGui::GetColorU32(
+        (hovered && ImGui::IsItemActive()) ? ImGuiCol_FrameBgActive
+        : hovered ? ImGuiCol_FrameBgHovered
+        : ImGuiCol_FrameBg);
+    ImU32 knob_col = ImGui::GetColorU32(ImGuiCol_CheckMark);
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRectFilled(track_min, track_max, track_col, rounding);
+    draw_list->AddCircleFilled(ImVec2(knob_x, knob_y), knob_radius, knob_col);
+
+    if (label[0] != '#' || label[1] != '#') {
+        ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+        ImGui::TextUnformatted(label);
+    }
+    ImGui::PopID();
+    return pressed;
+}
+
 std::string GetAppDataDir() {
     char* localAppData = nullptr;
     size_t len = 0;
@@ -903,11 +957,11 @@ void GhostGUI::RenderPageBrowser() {
                 std::string writeVal;
 
                 if (ftype == FlagType::Bool) {
-                    // Checkbox — toggling writes immediately
+                    // Toggle — toggling writes immediately
                     bool cur = (entry->readSuccess &&
                                 (entry->currentValue == "1" || entry->currentValue == "true"));
                     bool toggled = cur;
-                    if (ImGui::Checkbox("##cb", &toggled) && m_attached) {
+                    if (ToggleButton("##cb", &toggled) && m_attached) {
                         writeVal = toggled ? "true" : "false";
                         didWrite = true;
                     }
@@ -1155,9 +1209,9 @@ void GhostGUI::RenderPagePresets() {
 void GhostGUI::RenderPageLogs() {
     if (ImGui::Button("Clear", { 70, 0 })) m_logs.clear();
     ImGui::SameLine();
-    ImGui::Checkbox("Auto-scroll", &m_logAutoScroll);
+    ToggleButton("Auto-scroll", &m_logAutoScroll);
     ImGui::SameLine();
-    ImGui::Checkbox("Log to file", &m_logToFile);
+    ToggleButton("Log to file", &m_logToFile);
     ImGui::SameLine();
     ImGui::TextDisabled("%zu lines", m_logs.size());
     ImGui::Spacing();
@@ -1201,18 +1255,18 @@ void GhostGUI::RenderPageSettings() {
 
     Section("Automation");
 
-    if (ImGui::Checkbox("Auto-attach to RobloxPlayerBeta.exe", &m_autoAttach)) {
+    if (ToggleButton("Auto-attach to RobloxPlayerBeta.exe", &m_autoAttach)) {
         if (m_autoAttach) StartWatcherThread();
         else              StopWatcherThread();
     }
     ImGui::TextDisabled("  Detects Roblox launch instantly via background watcher");
     ImGui::Spacing();
 
-    ImGui::Checkbox("Auto-inject saved FFlags on attach", &m_autoInject);
+    ToggleButton("Auto-inject saved FFlags on attach", &m_autoInject);
     ImGui::TextDisabled("  Waits for flags to initialize, then injects");
     ImGui::Spacing();
 
-    ImGui::Checkbox("Auto-read FFlag values", &m_autoRead);
+    ToggleButton("Auto-read FFlag values", &m_autoRead);
     if (m_autoRead) {
         ImGui::SameLine();
         ImGui::SetNextItemWidth(80);
@@ -1222,12 +1276,12 @@ void GhostGUI::RenderPageSettings() {
     }
     ImGui::Spacing();
 
-    ImGui::Checkbox("Auto-update offsets on version mismatch", &m_autoUpdateOffsets);
+    ToggleButton("Auto-update offsets on version mismatch", &m_autoUpdateOffsets);
     ImGui::TextDisabled("  Fetches latest offsets when Roblox has updated");
 
     Section("Streamproof");
 
-    if (ImGui::Checkbox("Hide from screen capture (OBS, Discord, etc.)", &m_streamproof)) {
+    if (ToggleButton("Hide from screen capture (OBS, Discord, etc.)", &m_streamproof)) {
         if (m_hwnd) {
             SetWindowDisplayAffinity(m_hwnd, m_streamproof ? 0x11 : 0x00);
             AddLog(m_streamproof ? "[SETTINGS] Streamproof enabled" : "[SETTINGS] Streamproof disabled");
