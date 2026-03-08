@@ -1,5 +1,6 @@
 #include "gui.h"
 #include "imgui.h"
+#include "icons.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -552,49 +553,63 @@ void GhostGUI::RenderTitleBar() {
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 
 void GhostGUI::RenderSidebar() {
-    ImDrawList* dl   = ImGui::GetWindowDrawList();
-    ImVec2 wpos      = ImGui::GetWindowPos();
-    float  w         = ImGui::GetWindowWidth();
+    ImDrawList* dl  = ImGui::GetWindowDrawList();
+    ImVec2 wpos     = ImGui::GetWindowPos();
+    float  w        = ImGui::GetWindowWidth();
+    float  h        = ImGui::GetWindowHeight();
 
-    // Slightly darker bg for the sidebar
-    dl->AddRectFilled(wpos, { wpos.x + w, wpos.y + ImGui::GetWindowHeight() },
-        IM_COL32(8, 8, 8, 255));
+    // Sidebar background
+    dl->AddRectFilled(wpos, { wpos.x + w, wpos.y + h }, IM_COL32(8, 8, 8, 255));
 
-    struct NavItem { const char* label; const char* icon; Page page; };
+    struct NavItem { const char* icon; const char* label; Page page; };
     static const NavItem items[] = {
-        { "Browser",  "B", Page::Browser  },
-        { "Injector", "I", Page::Injector },
-        { "Presets",  "P", Page::Presets  },
-        { "Logs",     "L", Page::Logs     },
-        { "Settings", "S", Page::Settings },
+        { ICON_FA_LIST,     "Browser",  Page::Browser  },
+        { ICON_FA_SYRINGE,  "Injector", Page::Injector },
+        { ICON_FA_BOOKMARK, "Presets",  Page::Presets  },
+        { ICON_FA_TERMINAL, "Logs",     Page::Logs     },
+        { ICON_FA_GEAR,     "Settings", Page::Settings },
     };
 
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 1 });
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
+    const float ROW_H    = 38.0f;
+    const float ICON_X   = 16.0f;  // icon left margin
+    const float LABEL_X  = 38.0f;  // label left margin (after icon)
+    const float ACCENT_W = 3.0f;
+
+    ImGui::SetCursorPos({ 0, 8 });
 
     for (auto& item : items) {
-        bool active = (m_activePage == item.page);
+        bool active  = (m_activePage == item.page);
+        ImVec2 rowPos = ImGui::GetCursorScreenPos();
 
-        if (active) {
-            // Active item: white left accent bar + lighter bg
-            ImVec2 p = ImGui::GetCursorScreenPos();
-            dl->AddRectFilled(p, { p.x + w, p.y + 36 }, IM_COL32(22, 22, 22, 255));
-            dl->AddRectFilled(p, { p.x + 3, p.y + 36 }, IM_COL32(220, 220, 220, 255));
-        }
+        // Background highlight for active / hovered
+        ImGui::InvisibleButton(item.label, { w, ROW_H });
+        bool hovered = ImGui::IsItemHovered();
+        bool clicked = ImGui::IsItemClicked();
+        if (clicked) m_activePage = item.page;
 
-        ImGui::PushStyleColor(ImGuiCol_Button,        IM_COL32(0,  0,  0,  0));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, IM_COL32(22, 22, 22, 255));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  IM_COL32(30, 30, 30, 255));
-        ImGui::PushStyleColor(ImGuiCol_Text,
-            active ? IM_COL32(240, 240, 240, 255) : IM_COL32(130, 130, 130, 255));
+        ImU32 bgCol = active  ? IM_COL32(22, 22, 22, 255)
+                    : hovered ? IM_COL32(16, 16, 16, 255)
+                    :           IM_COL32(0,  0,  0,  0);
+        if (bgCol >> 24)
+            dl->AddRectFilled(rowPos, { rowPos.x + w, rowPos.y + ROW_H }, bgCol);
 
-        if (ImGui::Button(item.label, { w, 36 }))
-            m_activePage = item.page;
+        // Left accent bar for active item
+        if (active)
+            dl->AddRectFilled(rowPos, { rowPos.x + ACCENT_W, rowPos.y + ROW_H },
+                IM_COL32(220, 220, 220, 255));
 
-        ImGui::PopStyleColor(4);
+        // Text colour
+        ImU32 textCol = active  ? IM_COL32(240, 240, 240, 255)
+                      : hovered ? IM_COL32(180, 180, 180, 255)
+                      :           IM_COL32(110, 110, 110, 255);
+
+        float textY = rowPos.y + (ROW_H - ImGui::GetTextLineHeight()) * 0.5f;
+
+        // Icon (FA glyph)
+        dl->AddText({ rowPos.x + ICON_X, textY }, textCol, item.icon);
+        // Label
+        dl->AddText({ rowPos.x + LABEL_X, textY }, textCol, item.label);
     }
-
-    ImGui::PopStyleVar(2);
 }
 
 // ── Status bar ───────────────────────────────────────────────────────────────

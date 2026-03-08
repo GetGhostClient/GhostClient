@@ -7,6 +7,8 @@
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
 #include "WantedSans_Regular.h"
+#include "FA6_Solid.h"
+#include "icons.h"
 
 #include <d3d11.h>
 #include <tchar.h>
@@ -73,12 +75,33 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
     GhostGUI::ApplyTheme();
 
     // Load WantedSans-Regular as the default font at 14px.
-    // FontDataOwnedByAtlas=false: ImGui won't free our static array.
-    // Do NOT call io.Fonts->Build() here — ImGui_ImplDX11 calls it on first NewFrame.
-    ImFontConfig fc;
-    fc.FontDataOwnedByAtlas = false;
-    io.Fonts->AddFontFromMemoryTTF(
-        (void*)WantedSans_Regular_ttf, (int)WantedSans_Regular_ttf_size, 14.0f, &fc);
+    // FontDataOwnedByAtlas=false: ImGui won't free our static arrays.
+    {
+        ImFontConfig fc;
+        fc.FontDataOwnedByAtlas = false;
+        io.Fonts->AddFontFromMemoryTTF(
+            (void*)WantedSans_Regular_ttf, (int)WantedSans_Regular_ttf_size, 14.0f, &fc);
+    }
+
+    // Merge FA6 Solid icons into the same font at 13px.
+    // Only the 5 glyphs we actually use — keeps atlas small.
+    {
+        static const ImWchar icon_ranges[] = {
+            0xF02E, 0xF02E,   // fa-bookmark  (Presets)
+            0xF013, 0xF013,   // fa-gear      (Settings)
+            0xF03A, 0xF03A,   // fa-list      (Browser)
+            0xF120, 0xF120,   // fa-terminal  (Logs)
+            0xF48E, 0xF48E,   // fa-syringe   (Injector)
+            0,
+        };
+        ImFontConfig ifc;
+        ifc.FontDataOwnedByAtlas = false;
+        ifc.MergeMode            = true;    // merge into previous font
+        ifc.GlyphMinAdvanceX     = 14.0f;  // fixed-width so icons stay aligned
+        ifc.GlyphOffset          = { 0, 1.0f }; // nudge down 1px for optical alignment
+        io.Fonts->AddFontFromMemoryTTF(
+            (void*)FA6_Solid_ttf, (int)FA6_Solid_ttf_size, 13.0f, &ifc, icon_ranges);
+    }
 
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
